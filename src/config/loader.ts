@@ -144,6 +144,7 @@ function mergeCloud(parsed: Record<string, unknown> | undefined): CloudConfig {
     accessKeyId: parsed.access_key_id as string | undefined,
     secretAccessKey: parsed.secret_access_key as string | undefined,
     endpoint: parsed.endpoint as string | undefined,
+    region: (parsed.region as string) || defaults.region,
     encryptionKey: parsed.encryption_key as string | undefined,
     syncIntervalMinutes: (parsed.sync_interval_minutes as number) || defaults.syncIntervalMinutes,
     syncOnSave: parsed.sync_on_save !== undefined
@@ -214,6 +215,7 @@ function configToYaml(config: Config): Record<string, unknown> {
       access_key_id: config.cloud.accessKeyId,
       secret_access_key: config.cloud.secretAccessKey,
       endpoint: config.cloud.endpoint,
+      region: config.cloud.region,
       encryption_key: config.cloud.encryptionKey,
       sync_interval_minutes: config.cloud.syncIntervalMinutes,
       sync_on_save: config.cloud.syncOnSave,

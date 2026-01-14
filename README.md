@@ -12,6 +12,8 @@ Pick up exactly where you left off - even months later.
 - **Full-Text Search** - Search across all your sessions by keywords, files, or tasks
 - **Smart Resume** - Resume any session with full context restoration
 - **Cross-Project Memory** - Access memories from any project
+- **Periodic Auto-Save** - Checkpoint saves every 5 minutes protect against data loss
+- **Cloud Sync (Pro)** - Sync sessions across devices with end-to-end encryption
 
 ## Installation
 
@@ -173,14 +175,16 @@ cc-sessions/
 ├── hooks/
 │   ├── hooks.json        # Hook configuration
 │   ├── session-start.ts  # Shows last session on startup
-│   └── session-end.ts    # Saves session on exit
+│   ├── session-end.ts    # Saves session on exit
+│   └── periodic-save.ts  # Auto-saves every 5 minutes
 └── src/                  # Core implementation
 ```
 
 ### Session Lifecycle
 
 1. **SessionStart Hook** - When you start Claude Code, cc-sessions shows your last session summary
-2. **SessionEnd Hook** - When you end the session, a full summary is generated and saved
+2. **Periodic Save Hook** - Every 5 minutes, a checkpoint is saved to protect against data loss
+3. **SessionEnd Hook** - When you end the session, a full summary is generated and saved
 
 ### Data Storage
 
@@ -205,6 +209,42 @@ cc-sessions reads Claude Code's JSONL logs from `~/.claude/projects/` and extrac
 | `90d` | 90 days | Short-term projects |
 | `1y` | 1 year | **Recommended** for most users |
 | `forever` | Never delete | Maximum history |
+
+## Cloud Sync (Pro Feature)
+
+Sync your sessions across devices with end-to-end encryption.
+
+### Supported Providers
+
+| Provider | Description |
+|----------|-------------|
+| **Cloudflare R2** | S3-compatible, no egress fees |
+| **AWS S3** | Industry standard cloud storage |
+| **Backblaze B2** | Low-cost storage option |
+
+### Configuration
+
+Add to your `~/.cc-sessions/config.yml`:
+
+```yaml
+cloud:
+  enabled: true
+  provider: r2  # or s3, b2
+  bucket: my-sessions-bucket
+  endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com
+  access_key_id: YOUR_ACCESS_KEY
+  secret_access_key: YOUR_SECRET_KEY
+  encryption_key: YOUR_256_BIT_HEX_KEY  # Auto-generated if not set
+  sync_on_save: true
+```
+
+### Security
+
+- All data is encrypted client-side using **AES-256-GCM**
+- Encryption key never leaves your device
+- Each device gets a unique identifier for sync
+
+See [Cloud Sync Documentation](https://iam-dev.github.io/cc-sessions/cloud-sync.html) for detailed setup instructions.
 
 ## Troubleshooting
 
@@ -231,7 +271,7 @@ cc-sessions reads Claude Code's JSONL logs from `~/.claude/projects/` and extrac
 You can also use cc-sessions programmatically:
 
 ```typescript
-import { SessionStore, loadConfig, parseLogFile } from '@iam-dev/cc-sessions';
+import { SessionStore, loadConfig, parseLogFile, CloudSync } from '@iam-dev/cc-sessions';
 
 // Load config
 const config = await loadConfig();
@@ -243,6 +283,12 @@ const searchResults = store.search('authentication');
 
 // Parse a log file
 const parsed = parseLogFile('/path/to/session.jsonl');
+
+// Cloud sync (Pro)
+if (config.cloud.enabled) {
+  const cloudSync = new CloudSync(config.cloud);
+  await cloudSync.sync(store);
+}
 
 store.close();
 ```
@@ -266,6 +312,16 @@ npm test
 # Lint
 npm run lint
 ```
+
+## Documentation
+
+Full documentation is available at **[iam-dev.github.io/cc-sessions](https://iam-dev.github.io/cc-sessions/)**
+
+- [Installation Guide](https://iam-dev.github.io/cc-sessions/installation.html)
+- [Command Reference](https://iam-dev.github.io/cc-sessions/commands.html)
+- [Configuration](https://iam-dev.github.io/cc-sessions/configuration.html)
+- [Cloud Sync Setup](https://iam-dev.github.io/cc-sessions/cloud-sync.html)
+- [API Reference](https://iam-dev.github.io/cc-sessions/api.html)
 
 ## License
 

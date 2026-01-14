@@ -21,6 +21,18 @@
           }
         ]
       }
+    ],
+    "Periodic": [
+      {
+        "intervalMinutes": 5,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PLUGIN_ROOT/dist/hooks/periodic-save.js",
+            "timeout": 15
+          }
+        ]
+      }
     ]
   }
 }

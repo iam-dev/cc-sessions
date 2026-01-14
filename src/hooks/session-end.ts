@@ -169,9 +169,26 @@ export default async function sessionEndHook(context: HookContext): Promise<void
     // Save to store
     const store = new SessionStore();
     store.save(sessionMemory);
-    store.close();
 
     console.log(`✅ cc-sessions: Session saved - ${sessionMemory.summary}`);
+
+    // Trigger cloud sync if enabled
+    if (config.cloud.enabled && config.cloud.syncOnSave) {
+      try {
+        const { CloudSync } = await import('../sync/cloud');
+        const cloudSync = new CloudSync(config.cloud);
+        await cloudSync.uploadSession(sessionMemory);
+        store.markSynced(sessionMemory.id);
+        console.log('☁️  cc-sessions: Session synced to cloud');
+      } catch (error) {
+        // Don't fail the session end if cloud sync fails
+        if (process.env.CC_MEMORY_DEBUG) {
+          console.error('cc-sessions: Cloud sync failed:', error);
+        }
+      }
+    }
+
+    store.close();
 
   } catch (error) {
     // Log error but don't interrupt session end

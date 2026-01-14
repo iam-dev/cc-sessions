@@ -21,6 +21,9 @@ export { RetentionManager } from './store/retention';
 export { loadConfig, saveConfig, getConfigDir, getConfigFile } from './config/loader';
 export { DEFAULT_CONFIG, RETENTION_OPTIONS, SUMMARY_MODELS } from './config/defaults';
 
+// Export sync (cloud storage)
+export { CloudSync, Encryptor, encryptJson, decryptJson } from './sync';
+
 // Version info
 export const VERSION = '1.0.0';
 export const NAME = 'cc-sessions';

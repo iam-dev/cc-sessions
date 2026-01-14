@@ -42,6 +42,7 @@ export const DEFAULT_CONFIG: Config = {
   cloud: {
     enabled: false,
     provider: 'r2',
+    region: 'auto',
     syncIntervalMinutes: 30,
     syncOnSave: true,
     deviceId: 'auto'

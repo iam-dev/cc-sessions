@@ -208,10 +208,22 @@ export interface CloudConfig {
   accessKeyId?: string;
   secretAccessKey?: string;
   endpoint?: string;
+  region?: string;
   encryptionKey?: string;
   syncIntervalMinutes: number;
   syncOnSave: boolean;
   deviceId: string;
+}
+
+/**
+ * Remote session metadata for cloud sync
+ */
+export interface RemoteSessionInfo {
+  sessionId: string;
+  deviceId: string;
+  uploadedAt: Date;
+  size: number;
+  key: string;
 }
 
 export interface UIConfig {

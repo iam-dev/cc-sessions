@@ -1,0 +1,30 @@
+title: cc-sessions
+description: Never lose context again. Smart session memory for Claude Code.
+baseurl: /cc-sessions
+url: https://iam-dev.github.io
+
+theme: jekyll-theme-cayman
+
+# Navigation
+header_pages:
+  - index.md
+  - installation.md
+  - commands.md
+  - configuration.md
+  - cloud-sync.md
+  - api.md
+
+# Markdown settings
+markdown: kramdown
+highlighter: rouge
+
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Exclude from build
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
