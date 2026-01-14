@@ -1,0 +1,132 @@
+# CC-Sessions Configuration
+# Session Memory Plugin for Claude Code
+version: 1
+
+# ============================================
+# RETENTION SETTINGS
+# ============================================
+retention:
+  # How long to keep full session data
+  # Options: 7d, 14d, 30d, 90d, 180d, 1y, 2y, 5y, forever
+  full_sessions: 1y
+
+  # How long to keep compressed archives
+  # (After full_sessions expires, data is compressed)
+  archives: forever
+
+  # How long to keep search index entries
+  # (Allows searching even if full data is archived)
+  search_index: forever
+
+  # Prevent Claude's default 30-day deletion
+  # This modifies ~/.claude/settings.json automatically
+  override_claude_retention: true
+
+  # Maximum storage size (triggers compression/cleanup)
+  max_storage_gb: 10
+
+# ============================================
+# AUTO-SAVE SETTINGS
+# ============================================
+auto_save:
+  enabled: true
+
+  # Save interval during active sessions
+  interval_minutes: 5
+
+  # Always save on session end
+  on_session_end: true
+
+  # Save on terminal close (best effort)
+  on_terminal_close: true
+
+  # Generate AI summary on save
+  generate_summary: true
+
+  # Extract tasks and next steps
+  extract_tasks: true
+
+# ============================================
+# SUMMARY GENERATION
+# ============================================
+summaries:
+  # Model to use for summaries (cost vs quality tradeoff)
+  # haiku: Fast, cheap (~$0.001 per summary)
+  # sonnet: Better quality (~$0.01 per summary)
+  model: haiku
+
+  # What to include in summaries
+  include:
+    - description
+    - tasks_completed
+    - tasks_pending
+    - files_modified
+    - next_steps
+    - key_decisions
+    - blockers
+
+  # Maximum summary length (tokens)
+  max_length: 500
+
+# ============================================
+# SEARCH SETTINGS
+# ============================================
+search:
+  # Enable full-text search
+  enabled: true
+
+  # Index these fields
+  index_fields:
+    - summary
+    - tasks
+    - files
+    - user_messages
+    - assistant_messages
+
+  # Fuzzy matching threshold (0-1)
+  fuzzy_threshold: 0.7
+
+# ============================================
+# CLOUD SYNC (Pro Feature)
+# ============================================
+cloud:
+  enabled: false
+
+  # Provider: "r2" (Cloudflare), "s3" (AWS), "b2" (Backblaze)
+  provider: r2
+
+  # Sync frequency
+  sync_interval_minutes: 30
+
+  # Sync on session end
+  sync_on_save: true
+
+  # Devices to sync between
+  device_id: auto
+
+# ============================================
+# UI PREFERENCES
+# ============================================
+ui:
+  # Show summary on session start
+  show_on_start: true
+
+  # Number of recent sessions in list
+  recent_count: 10
+
+  # Date format
+  date_format: "MMM D, YYYY h:mm A"
+
+  # Color theme (auto, dark, light)
+  theme: auto
+
+# ============================================
+# PROJECTS
+# ============================================
+projects:
+  # Project-specific retention overrides
+  overrides: {}
+  # Example:
+  # "/Users/you/work/client-project":
+  #   retention: 2y
+  #   cloud_sync: true

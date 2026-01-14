@@ -1,0 +1,55 @@
+{
+  "name": "@iam-dev/cc-sessions",
+  "version": "1.0.0",
+  "description": "Never lose context again. Smart session memory with extended retention for Claude Code.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "cc-sessions": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "session",
+    "memory",
+    "context",
+    "plugin"
+  ],
+  "author": "iam-dev",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "glob": "^10.3.10",
+    "yaml": "^2.3.4",
+    "commander": "^12.0.0",
+    "@anthropic-ai/sdk": "^0.20.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.11",
+    "ts-jest": "^29.1.2",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "commands",
+    "hooks",
+    "templates",
+    ".claude-plugin"
+  ]
+}

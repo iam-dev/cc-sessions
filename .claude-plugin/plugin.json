@@ -1,0 +1,15 @@
+{
+  "name": "cc-sessions",
+  "version": "1.0.0",
+  "description": "Never lose context again. Smart session memory with extended retention for Claude Code.",
+  "author": {
+    "name": "iam-dev",
+    "url": "https://github.com/iam-dev"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/iam-dev/cc-sessions",
+  "repository": "https://github.com/iam-dev/cc-sessions",
+  "keywords": ["session", "memory", "context", "persistence"],
+  "commands": "./commands",
+  "hooks": "./hooks/hooks.json"
+}

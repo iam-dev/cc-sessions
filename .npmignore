@@ -1,0 +1,31 @@
+# Source files (dist is published)
+src/
+tests/
+
+# Config files
+.eslintrc.js
+jest.config.js
+tsconfig.json
+
+# Development
+.DS_Store
+*.log
+coverage/
+.nyc_output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Specs
+specs/
+
+# Test databases
+*.db
+*.db-journal
