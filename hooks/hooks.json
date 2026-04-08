@@ -9,6 +9,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PLUGIN_ROOT/dist/hooks/post-clear.js",
+            "timeout": 30
+          }
+        ]
       }
     ],
     "SessionEnd": [
@@ -17,6 +27,18 @@
           {
             "type": "command",
             "command": "node $CLAUDE_PLUGIN_ROOT/dist/hooks/session-end.js",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PLUGIN_ROOT/dist/hooks/notification.js",
             "timeout": 30
           }
         ]
