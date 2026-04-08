@@ -147,9 +147,25 @@ Import all Claude Code CLI sessions from `~/.claude/projects/` with AI-generated
 
 ```
 /sessions:import
+/sessions:import --limit 9999
+/sessions:import --no-ai
+/sessions:import --since 2025-01-01
+/sessions:import --dry-run
 ```
 
-Runs `cc-sessions import --limit 9999`, shows the output, then displays the 5 most recent sessions for verification. If many show `no-ai-summary` tags, suggests running `cc-sessions summarize`.
+Runs `cc-sessions import` with any arguments you pass. Use `--limit 9999` to import your full history.
+
+### `/sessions:summarize`
+Regenerate AI-powered summaries for sessions that only have rule-based summaries.
+
+```
+/sessions:summarize
+/sessions:summarize --all
+/sessions:summarize --all --limit 9999
+/sessions:summarize mem_abc123_xyz789
+```
+
+Without `--all`, only sessions tagged `no-ai-summary` are processed. Use `--all` to force-regenerate every session.
 
 ## Snapshots & Resume
 

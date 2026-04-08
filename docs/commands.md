@@ -521,9 +521,69 @@ Import all Claude Code CLI sessions from `~/.claude/projects/` with AI-generated
 
 ```
 /sessions:import
+/sessions:import --limit 9999
+/sessions:import --no-ai
+/sessions:import --since 2025-01-01
+/sessions:import --project /path/to/project
+/sessions:import --dry-run
 ```
 
-Runs `cc-sessions import --limit 9999`, shows the output, then displays the 5 most recent imported sessions so you can verify summary quality. If many show `no-ai-summary` tags, suggests running `cc-sessions summarize`.
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--limit <n>` | Maximum sessions to import (default: 100) |
+| `--no-ai` | Skip AI summaries; use rule-based instead |
+| `--since <date>` | Only import sessions on or after this date (ISO 8601) |
+| `--project <path>` | Only import sessions for a specific project |
+| `--dry-run` | Preview what would be imported without saving |
+
+Runs `cc-sessions import` with any arguments passed. Safe to re-run — sessions already in the database are automatically skipped.
+
+---
+
+## /sessions:summarize
+
+Regenerate AI-powered summaries for sessions with rule-based (no-ai-summary) summaries.
+
+```
+/sessions:summarize
+/sessions:summarize --all
+/sessions:summarize --all --limit 9999
+/sessions:summarize mem_abc123_xyz789
+/sessions:summarize --no-ai
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `[session-id]` | Optional. Summarize a single specific session. |
+| `--all` | Force-regenerate all sessions, not just `no-ai-summary` ones |
+| `--no-ai` | Use rule-based summarizer only (no AI providers) |
+| `--limit <n>` | Cap sessions processed (default: 50) |
+
+### When to use
+
+After importing sessions with `--no-ai` or when AI was unavailable at import time, sessions are tagged `no-ai-summary`. Run `/sessions:summarize --all --limit 9999` to retroactively upgrade all summaries with AI.
+
+### Output
+
+```
+Scanning for sessions to summarize...
+Found 47 sessions.
+
+[  1/47] myapp: Updated import docs...             ✅ CC CLI
+[  2/47] cc-sessions: Add authentication...        ✅ API
+[  3/47] project: Refactored nav...                ✅ rule-based
+[  4/47] VlamGuard: Log file not found, skipping   ⚠️  skipped
+
+Done. 44 updated, 3 skipped.
+```
+
+### Provider chain
+
+Tries in order: CC CLI (`claude` binary) → Anthropic API (`ANTHROPIC_API_KEY`) → rule-based fallback.
 
 ---
 

@@ -20,8 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SessionStart hook with `matcher: "clear"`** — registered in `hooks/hooks.json`; fires after the user types `/clear` and auto-saves the cleared session
 - **`/sessions:clear` slash command skill** — saves the current session via `cc-sessions save` before running `/clear`; warns if save fails
 
-#### Import Workflow
-- **`/sessions:import` slash command skill** — runs `cc-sessions import --limit 9999`, shows output, then displays the 5 most recent sessions for verification; suggests `cc-sessions summarize` if many have `no-ai-summary` tags
+#### Slash Commands
+- **`/sessions:import` slash command** — command file at `commands/sessions-import.md`; passes `$ARGUMENTS` directly to `cc-sessions import` (e.g. `/sessions:import --limit 9999 --no-ai`); covers all import flags: `--limit`, `--no-ai`, `--since`, `--project`, `--dry-run`
+- **`/sessions:summarize` slash command** — command file at `commands/sessions-summarize.md`; passes `$ARGUMENTS` directly to `cc-sessions summarize` (e.g. `/sessions:summarize --all --limit 9999`); covers `[session-id]`, `--all`, `--no-ai`, `--limit`
 
 #### UI
 - **`pre-clear` tag badge** — sessions saved before a `/clear` now show a 🗑️ `pre-clear` badge in the Sessions Browser UI
