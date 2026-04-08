@@ -186,6 +186,13 @@ export function getUIHtml(): string {
     .file-chip.modified { border-color: #3a3a2a; color: var(--yellow); }
     .detail-id { font-size: 11px; color: var(--dim); padding-top: 16px; border-top: 1px solid var(--border); margin-top: 32px; }
 
+    /* ── Tag badges ──────────────────────────────────────────────── */
+    .tag-badge {
+      background: #2a2420; border: 1px solid #5a3a20;
+      border-radius: 4px; padding: 2px 6px; font-size: 10px;
+      color: var(--accent); flex-shrink: 0;
+    }
+
     /* ── Shared ───────────────────────────────────────────────────── */
     .loading { display: flex; align-items: center; justify-content: center; padding: 64px; gap: 10px; color: var(--dim); font-size: 13px; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -576,6 +583,18 @@ function buildSessionCard(s, backView) {
   if (s.description) {
     card.appendChild(h('div', { class: 'session-card-desc', text: trunc(s.description, 130) }));
   }
+
+  // Tag badges (pre-compact, snapshot)
+  var KNOWN_TAGS = { 'pre-compact': '\uD83D\uDCF8 pre-compact', 'snapshot': '\uD83D\uDCCC snapshot' };
+  var tagKeys = Object.keys(KNOWN_TAGS);
+  if (s.tags && s.tags.length > 0) {
+    for (var ti = 0; ti < tagKeys.length; ti++) {
+      if (s.tags.indexOf(tagKeys[ti]) !== -1) {
+        meta.appendChild(h('span', { class: 'tag-badge', text: KNOWN_TAGS[tagKeys[ti]] }));
+      }
+    }
+  }
+
   card.appendChild(meta);
   return card;
 }
