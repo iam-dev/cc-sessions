@@ -27,10 +27,12 @@ describe('tryAnthropicApi', () => {
     const saved = process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
 
-    const result = await tryAnthropicApi(makeSession(), testConfig);
-    expect(result).toBeNull();
-
-    if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
+    try {
+      const result = await tryAnthropicApi(makeSession(), testConfig);
+      expect(result).toBeNull();
+    } finally {
+      if (saved !== undefined) process.env.ANTHROPIC_API_KEY = saved;
+    }
   });
 
   // Integration test — skipped in CI (no real key available)

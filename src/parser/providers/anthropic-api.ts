@@ -59,12 +59,12 @@ export async function tryAnthropicApi(
     const prompt = buildPrompt(parsed);
 
     const modelId = config.model === 'sonnet'
-      ? 'claude-sonnet-4-20250514'
-      : 'claude-3-haiku-20240307';
+      ? 'claude-sonnet-4-6'
+      : 'claude-haiku-4-5-20251001';
 
     const response = await client.messages.create({
       model: modelId,
-      max_tokens: config.maxLength || 500,
+      max_tokens: Math.max(config.maxLength || 500, 500),
       messages: [{ role: 'user', content: prompt }],
     });
 
