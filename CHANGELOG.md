@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-08
+
+### Added
+
+#### Project Summary View
+- **New Project Summary view** — clicking a project card now opens a dedicated summary page instead of going straight to the sessions list
+- **Aggregate stat cards** — displays Sessions, Tokens, Duration, and Tasks Done for each project at a glance
+- **README section** — reads `README.md` from the project directory and renders it as formatted Markdown; auto-creates a starter `README.md` if none exists
+- **Markdown rendering** — uses `marked` + `DOMPurify` (loaded from jsDelivr CDN) for safe, styled Markdown output in the dark theme
+- **Recent Activity section** — shows the 5 most recent sessions directly on the summary page
+- **Browse All Sessions button** — navigates from the summary view into the full sessions list for that project
+- **Back-label support** — detail view back button correctly shows the project name when navigating from the summary view
+
+#### API
+- **`GET /api/projects/:path`** — new endpoint returning a project's `ProjectSummary`, `recentSessions` (last 5), and `readmeContent`
+
+#### Data
+- **`totalTasksCompleted`** added to `ProjectSummary` type and `getProjects()` SQL query (`SUM(tasks_completed)`)
+
+---
+
+## [1.2.1] - 2026-04-08
+
+### Fixed
+
+#### Code Quality & Correctness
+- **LIKE wildcard escaping** — `simplSearch` fallback now escapes `%` and `_` in user queries to return accurate results
+- **FTS index rebuild safety** — FTS5 content table column names now match the backing `sessions` table (fixes `rebuild` operations)
+- **`getStats()` uses instance `dbPath`** — storage stats now report the correct file size when using a non-default database path
+- **`loadConfig()` side-effect removed** — no longer writes a default config file on first call; callers that need persistence should call `saveConfig()` explicitly
+- **`trimToStorageLimit` performance** — size is now tracked incrementally during cleanup instead of re-walking the full directory after each deletion
+
+#### Cloud Sync
+- **AWS SDK stream type** — replaced `@ts-expect-error` workaround with proper `response.Body.transformToByteArray()` call
+- **Encryption key output** — key is now written to `stderr` instead of `stdout` to avoid capture in pipes and CI logs
+
+#### Hooks
+- **`SessionStore` resource leak** — both session-end and periodic-save hooks now close the store in a `try/finally` block, preventing DB connection leaks on error paths
+- **Redundant module-level state removed** — `currentSessionMemoryId` in periodic-save was always `null` (hooks run as new processes); replaced with direct DB lookup
+
+#### Tests
+- **Loader test isolation** — `loadConfig` test no longer writes to the real `~/.cc-sessions/` directory
+- **Cloud test safety** — device-id file is now saved and restored around each test instead of being permanently deleted
+
+#### Refactoring
+- **Shared hook utilities** — `generateId()` and `findCurrentSessionLog()` extracted to `src/hooks/utils.ts`, eliminating duplication between session-end and periodic-save hooks
+- **SQL-based file/tag search** — `SearchIndex.searchByFile()` and `searchByTag()` now use targeted SQL queries instead of loading all sessions into memory
+
+### Changed
+- Version bumped to `1.1.0` in `src/index.ts`, `src/cli.ts`, and `package.json` (was incorrectly left at `1.0.0` since the v1.1.0 release)
+
+---
+
+## [1.2.0] - 2026-04-08
+
+### Added
+
+#### Sessions Browser UI
+- **`/sessions:ui` slash command** — opens a local web UI at `http://127.0.0.1:3456` in your default browser
+- **`cc-sessions ui` CLI command** — starts the web server with `--port` and `--no-open` flags
+- **Projects page** — claude.ai-style grid of project cards showing name, last summary, last activity, and session count
+- **Session list view** — clicking a project shows its sessions with summary, duration, and token usage
+- **Session detail view** — full detail panel with tasks, files created/modified, key decisions, next steps, and blockers
+- **All Sessions view** — flat chronological list across every project
+- **Search** — live full-text search from the sidebar filters sessions across all projects
+- **Filter & sort** — filter projects inline by name/summary; sort by activity, name, or session count
+- **`getProjects()` store method** — SQL aggregation returning one `ProjectSummary` per project path
+
 ## [1.1.0] - 2025-01-14
 
 ### Added

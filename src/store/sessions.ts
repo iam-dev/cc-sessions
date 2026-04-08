@@ -8,15 +8,18 @@ import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import type { SessionMemory, SearchResult, SearchMatch, StorageStats, Task } from '../types';
+import type { SessionMemory, SearchResult, SearchMatch, StorageStats, Task, ProjectSummary } from '../types';
 
 const DB_DIR = path.join(os.homedir(), '.cc-sessions');
 const DB_PATH = path.join(DB_DIR, 'index.db');
 
 export class SessionStore {
   private db: Database.Database;
+  private dbPath: string;
 
   constructor(dbPath: string = DB_PATH) {
+    this.dbPath = dbPath;
+
     // Ensure directory exists
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
@@ -309,10 +312,14 @@ export class SessionStore {
    * Simple search fallback using LIKE
    */
   private simplSearch(query: string, limit: number): SearchResult[] {
-    const pattern = `%${query}%`;
+    // Escape LIKE special characters to match literal text
+    const escaped = query.replace(/[%_\\]/g, '\\$&');
+    const pattern = `%${escaped}%`;
     const stmt = this.db.prepare(`
       SELECT * FROM sessions
-      WHERE summary LIKE ? OR description LIKE ? OR last_user_message LIKE ?
+      WHERE summary LIKE ? ESCAPE '\\'
+         OR description LIKE ? ESCAPE '\\'
+         OR last_user_message LIKE ? ESCAPE '\\'
       ORDER BY started_at DESC
       LIMIT ?
     `);
@@ -327,6 +334,41 @@ export class SessionStore {
         highlight: String(row.summary || '')
       }]
     }));
+  }
+
+  /**
+   * Find sessions that touched a specific file path (SQL-based, no full table scan)
+   */
+  findByFilePath(filePath: string, limit: number = 20): SessionMemory[] {
+    const escaped = filePath.replace(/[%_\\]/g, '\\$&');
+    const pattern = `%${escaped}%`;
+    const stmt = this.db.prepare(`
+      SELECT * FROM sessions
+      WHERE files_created_json LIKE ? ESCAPE '\\'
+         OR files_modified_json LIKE ? ESCAPE '\\'
+         OR files_deleted_json LIKE ? ESCAPE '\\'
+      ORDER BY started_at DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(pattern, pattern, pattern, limit) as Record<string, unknown>[];
+    return rows.map(row => this.rowToSession(row));
+  }
+
+  /**
+   * Find sessions with a specific tag (SQL-based, no full table scan)
+   */
+  findByTag(tag: string, limit: number = 20): SessionMemory[] {
+    // Match JSON array element: ["tag"] or ["other","tag","more"]
+    const escaped = tag.replace(/[%_\\]/g, '\\$&').replace(/"/g, '');
+    const pattern = `%"${escaped}"%`;
+    const stmt = this.db.prepare(`
+      SELECT * FROM sessions
+      WHERE tags_json LIKE ? ESCAPE '\\' AND archived = 0
+      ORDER BY started_at DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(pattern, limit) as Record<string, unknown>[];
+    return rows.map(row => this.rowToSession(row));
   }
 
   /**
@@ -403,7 +445,7 @@ export class SessionStore {
     const row = countStmt.get() as Record<string, unknown>;
 
     // Calculate database size
-    const dbSize = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+    const dbSize = fs.existsSync(this.dbPath) ? fs.statSync(this.dbPath).size : 0;
 
     return {
       totalSessions: Number(row.total) || 0,
@@ -413,6 +455,47 @@ export class SessionStore {
       oldestSession: row.oldest ? new Date(Number(row.oldest)) : undefined,
       newestSession: row.newest ? new Date(Number(row.newest)) : undefined
     };
+  }
+
+  /**
+   * Return one ProjectSummary per unique project path, derived from sessions.
+   * Only non-archived sessions are counted.
+   * Projects are ordered by most recent session activity first.
+   */
+  getProjects(): ProjectSummary[] {
+    const rows = this.db.prepare(`
+      SELECT
+        s.project_path,
+        s.project_name,
+        COUNT(*)                               AS session_count,
+        MAX(s.started_at)                      AS last_session_at,
+        SUM(s.tokens_used)                     AS total_tokens,
+        SUM(s.duration)                        AS total_duration,
+        SUM(s.tasks_completed)                 AS total_tasks_completed,
+        (
+          SELECT summary
+          FROM   sessions sub
+          WHERE  sub.project_path = s.project_path
+            AND  sub.archived     = 0
+          ORDER  BY sub.started_at DESC
+          LIMIT  1
+        )                                      AS last_summary
+      FROM   sessions s
+      WHERE  s.archived = 0
+      GROUP  BY s.project_path
+      ORDER  BY last_session_at DESC
+    `).all() as Array<Record<string, unknown>>;
+
+    return rows.map(row => ({
+      projectPath:   String(row['project_path']),
+      projectName:   String(row['project_name']),
+      sessionCount:  Number(row['session_count']),
+      lastSessionAt: new Date(Number(row['last_session_at'])),
+      lastSummary:   row['last_summary'] ? String(row['last_summary']) : '',
+      totalTokens:   Number(row['total_tokens'])  || 0,
+      totalDuration:        Number(row['total_duration'])        || 0,
+      totalTasksCompleted:  Number(row['total_tasks_completed']) || 0,
+    }));
   }
 
   /**

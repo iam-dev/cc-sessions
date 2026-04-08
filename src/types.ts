@@ -244,6 +244,33 @@ export interface ProjectOverride {
 }
 
 // ============================================
+// Project Types
+// ============================================
+
+/**
+ * Aggregated summary of all sessions belonging to one project.
+ * Derived from the sessions table — not persisted separately.
+ */
+export interface ProjectSummary {
+  /** Absolute file-system path that identifies the project */
+  projectPath: string;
+  /** Human-readable project name (from the most recent session) */
+  projectName: string;
+  /** Number of non-archived sessions for this project */
+  sessionCount: number;
+  /** Start time of the most recent non-archived session */
+  lastSessionAt: Date;
+  /** Summary text from the most recent non-archived session */
+  lastSummary: string;
+  /** Sum of tokensUsed across all non-archived sessions */
+  totalTokens: number;
+  /** Sum of duration (minutes) across all non-archived sessions */
+  totalDuration: number;
+  /** Sum of tasks_completed across all non-archived sessions */
+  totalTasksCompleted: number;
+}
+
+// ============================================
 // Store Types
 // ============================================
 

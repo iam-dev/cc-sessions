@@ -57,32 +57,14 @@ export class SearchIndex {
    * Search by file path - find all sessions that touched a specific file
    */
   searchByFile(filePath: string, limit: number = 20): SessionMemory[] {
-    // Get all sessions and filter by file
-    const sessions = this.store.getAll(true);
-
-    return sessions
-      .filter(session => {
-        const allFiles = [
-          ...session.filesCreated,
-          ...session.filesModified,
-          ...session.filesDeleted
-        ];
-        return allFiles.some(f => f.includes(filePath));
-      })
-      .slice(0, limit);
+    return this.store.findByFilePath(filePath, limit);
   }
 
   /**
    * Search by tag
    */
   searchByTag(tag: string, limit: number = 20): SessionMemory[] {
-    const sessions = this.store.getAll(false);
-
-    return sessions
-      .filter(session =>
-        session.tags.some(t => t.toLowerCase() === tag.toLowerCase())
-      )
-      .slice(0, limit);
+    return this.store.findByTag(tag, limit);
   }
 
   /**

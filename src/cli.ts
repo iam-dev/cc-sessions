@@ -6,9 +6,11 @@
 
 import { Command } from 'commander';
 import * as path from 'path';
+import * as http from 'http';
 import { SessionStore } from './store/sessions';
 import { loadConfig, getConfigFile } from './config/loader';
 import { RETENTION_OPTIONS, SUMMARY_MODELS } from './config/defaults';
+import { createServer } from './server/index';
 import type { SessionMemory, Config } from './types';
 
 const program = new Command();
@@ -16,7 +18,7 @@ const program = new Command();
 program
   .name('cc-sessions')
   .description('Smart session memory for Claude Code')
-  .version('1.0.0');
+  .version('1.1.0');
 
 /**
  * Format duration in human readable format
@@ -527,5 +529,69 @@ function printSessionDetail(session: SessionMemory): void {
   console.log(`[/sessions:resume] Resume    [/sessions:search] Search`);
   console.log(`Session ID: ${session.id}`);
 }
+
+/**
+ * UI command - start the web UI server
+ */
+program
+  .command('ui')
+  .description('Open the session browser UI in your web browser')
+  .option('-p, --port <number>', 'Port to listen on', '3456')
+  .option('--no-open', 'Print the URL but do not open the browser automatically')
+  .action(async (options: { port: string; open: boolean }) => {
+    const port = parseInt(options.port, 10);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      console.error('Invalid port: ' + options.port + '. Must be a number between 1 and 65535.');
+      process.exit(1);
+    }
+
+    const store = new SessionStore();
+    const { server } = createServer(store);
+
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error('Port ' + port + ' is already in use. Try: cc-sessions ui --port 3457');
+      } else {
+        console.error('Server error: ' + err.message);
+      }
+      store.close();
+      process.exit(1);
+    });
+
+    server.listen(port, '127.0.0.1', async () => {
+      const uiUrl = 'http://127.0.0.1:' + port;
+      console.log('CC Sessions UI running at ' + uiUrl);
+      console.log('Press Ctrl+C to stop.\n');
+
+      if (options.open) {
+        try {
+          const { default: childProcess } = await import('child_process');
+          const platform = process.platform;
+          if (platform === 'darwin') {
+            childProcess.spawn('open', [uiUrl], { detached: true, stdio: 'ignore' });
+          } else if (platform === 'win32') {
+            childProcess.spawn('cmd', ['/c', 'start', uiUrl], { detached: true, stdio: 'ignore' });
+          } else {
+            childProcess.spawn('xdg-open', [uiUrl], { detached: true, stdio: 'ignore' });
+          }
+        } catch {
+          // Browser open is best-effort — the URL is already printed above
+        }
+      }
+    });
+
+    process.on('SIGINT', () => {
+      server.close(() => {
+        store.close();
+        process.exit(0);
+      });
+    });
+    process.on('SIGTERM', () => {
+      server.close(() => {
+        store.close();
+        process.exit(0);
+      });
+    });
+  });
 
 program.parse();

@@ -69,20 +69,32 @@ describe('CloudSync', () => {
     logFile: '/path/to/log.jsonl'
   });
 
-  // Clean up device ID file between tests
+  // Save/restore the real device-id file to avoid destroying user state
   const deviceIdPath = path.join(os.homedir(), '.cc-sessions', 'device-id');
+  let savedDeviceId: string | null = null;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Remove device ID file to ensure clean state
+    // Save the existing device ID so we can restore it after the test
+    savedDeviceId = fs.existsSync(deviceIdPath)
+      ? fs.readFileSync(deviceIdPath, 'utf-8')
+      : null;
     if (fs.existsSync(deviceIdPath)) {
       fs.unlinkSync(deviceIdPath);
     }
   });
 
   afterEach(() => {
-    // Clean up device ID file
-    if (fs.existsSync(deviceIdPath)) {
+    jest.clearAllMocks();
+    // Restore the original device ID
+    if (savedDeviceId !== null) {
+      const dir = path.dirname(deviceIdPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(deviceIdPath, savedDeviceId, 'utf-8');
+    } else if (fs.existsSync(deviceIdPath)) {
+      // Clean up any device-id file the test created
       fs.unlinkSync(deviceIdPath);
     }
   });
