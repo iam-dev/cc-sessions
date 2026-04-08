@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-08
+
+### Added
+
+#### Sessions Browser UI
+- **`/sessions:ui` slash command** — opens a local web UI at `http://127.0.0.1:3456` in your default browser
+- **`cc-sessions ui` CLI command** — starts the web server with `--port` and `--no-open` flags
+- **Projects page** — claude.ai-style grid of project cards showing name, last summary, last activity, and session count
+- **Session list view** — clicking a project shows its sessions with summary, duration, and token usage
+- **Session detail view** — full detail panel with tasks, files created/modified, key decisions, next steps, and blockers
+- **All Sessions view** — flat chronological list across every project
+- **Search** — live full-text search from the sidebar filters sessions across all projects
+- **Filter & sort** — filter projects inline by name/summary; sort by activity, name, or session count
+- **`getProjects()` store method** — SQL aggregation returning one `ProjectSummary` per project path
+
 ## [1.1.0] - 2025-01-14
 
 ### Added
