@@ -6,7 +6,15 @@ import * as path from 'path';
 import * as os from 'os';
 import { handleNotification } from '../../src/hooks/notification';
 import { SessionStore } from '../../src/store/sessions';
+import { findCurrentSessionLog } from '../../src/hooks/utils';
 import type { Config } from '../../src/types';
+
+jest.mock('../../src/hooks/utils', () => ({
+  ...jest.requireActual('../../src/hooks/utils'),
+  findCurrentSessionLog: jest.fn(),
+}));
+
+const mockFindLog = findCurrentSessionLog as jest.MockedFunction<typeof findCurrentSessionLog>;
 
 const testConfig: Config = {
   version: 1,
@@ -37,6 +45,7 @@ describe('handleNotification', () => {
   beforeAll(() => { fs.mkdirSync(tmpDir, { recursive: true }); });
 
   beforeEach(() => {
+    mockFindLog.mockReset();
     if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
     store = new SessionStore(dbPath);
   });
@@ -46,7 +55,8 @@ describe('handleNotification', () => {
   afterAll(() => { fs.rmSync(tmpDir, { recursive: true }); });
 
   it('saves session tagged pre-compact when message contains "compact"', async () => {
-    writeMinimalJsonl(tmpDir, 'test-session-id');
+    const logFilePath = writeMinimalJsonl(tmpDir, 'test-session-id');
+    mockFindLog.mockReturnValue(logFilePath);
 
     const payload = {
       hook_event_name: 'Notification',
@@ -63,8 +73,6 @@ describe('handleNotification', () => {
   });
 
   it('does nothing when message does not contain "compact"', async () => {
-    writeMinimalJsonl(tmpDir, 'other-session');
-
     const payload = {
       hook_event_name: 'Notification',
       session_id: 'other-session',
@@ -75,6 +83,7 @@ describe('handleNotification', () => {
     await handleNotification(payload, store, testConfig);
 
     expect(store.getAll()).toHaveLength(0);
+    expect(mockFindLog).not.toHaveBeenCalled();
   });
 
   it('does nothing when hook_event_name is not Notification', async () => {
@@ -88,6 +97,7 @@ describe('handleNotification', () => {
     await handleNotification(payload, store, testConfig);
 
     expect(store.getAll()).toHaveLength(0);
+    expect(mockFindLog).not.toHaveBeenCalled();
   });
 
   it('does nothing when params.message is absent', async () => {
@@ -101,5 +111,6 @@ describe('handleNotification', () => {
     await handleNotification(payload as never, store, testConfig);
 
     expect(store.getAll()).toHaveLength(0);
+    expect(mockFindLog).not.toHaveBeenCalled();
   });
 });

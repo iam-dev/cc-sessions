@@ -7,8 +7,6 @@
  * Entry point: cc-sessions notify (reads JSON from stdin, always exits 0)
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { loadConfig } from '../config/loader';
 import { SessionStore } from '../store/sessions';
 import { findCurrentSessionLog } from './utils';
@@ -31,21 +29,6 @@ function dbg(msg: string): void {
 }
 
 /**
- * Resolve the JSONL log path for the given session.
- *
- * Tries a direct path first (cwd/<sessionId>.jsonl) so that tests
- * and edge-cases where the log lives outside ~/.claude/projects work.
- * Falls back to findCurrentSessionLog which scans ~/.claude/projects.
- */
-function resolveLogPath(sessionId: string, cwd: string): string | null {
-  const direct = path.join(cwd, `${sessionId}.jsonl`);
-  if (fs.existsSync(direct)) {
-    return direct;
-  }
-  return findCurrentSessionLog(sessionId, cwd);
-}
-
-/**
  * Handle a parsed Notification payload.
  * Exported for unit testing — CLI entry point passes in store + config.
  */
@@ -64,7 +47,7 @@ export async function handleNotification(
     return;
   }
 
-  const logPath = resolveLogPath(payload.session_id, payload.cwd);
+  const logPath = findCurrentSessionLog(payload.session_id, payload.cwd);
   if (!logPath) {
     dbg('Notification: no session log found');
     return;
