@@ -34,6 +34,9 @@ export function getUIHtml(): string {
       --green:       #4ade80;
       --yellow:      #fbbf24;
       --red:         #ef4444;
+      --health-green:  #22c55e;
+      --health-yellow: #eab308;
+      --health-red:    #ef4444;
     }
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -307,6 +310,27 @@ export function getUIHtml(): string {
       white-space: pre-wrap; word-break: break-word;
     }
     .msg-bubble.user { border-color: #3a2e20; color: var(--text); }
+
+    /* ── Health indicators ─────────────────────────────────────────────── */
+    .health-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; flex-shrink: 0; cursor: default; vertical-align: middle;
+    }
+    .health-dot.health-green  { background: var(--health-green); }
+    .health-dot.health-yellow { background: var(--health-yellow); }
+    .health-dot.health-red    { background: var(--health-red); }
+
+    .health-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 500;
+    }
+    .health-badge.health-green  { color: var(--health-green);  border: 1px solid #1a3a2a; background: #0a2a1a; }
+    .health-badge.health-yellow { color: var(--health-yellow); border: 1px solid #3a3020; background: #2a2010; }
+    .health-badge.health-red    { color: var(--health-red);    border: 1px solid #3a1a1a; background: #2a0a0a; }
+
+    .health-project-line {
+      font-size: 11px; display: flex; align-items: center; gap: 5px; margin-top: 2px;
+    }
   </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
@@ -544,6 +568,61 @@ function get(path) {
   return fetch(path).then(function(r) { return r.json(); });
 }
 
+/* ─── health scoring ─────────────────────────────────────────────────────── */
+function computeHealth(s) {
+  var blockers     = s.blockers     || [];
+  var completed    = s.tasksCompleted || 0;
+  var pending      = s.tasksPending   || 0;
+  var nextSteps    = s.nextSteps    || [];
+  var total        = completed + pending;
+  var rate         = total > 0 ? completed / total : null;
+  var reasons      = [];
+
+  var isRed = blockers.length >= 3
+    || (blockers.length >= 1 && completed === 0 && nextSteps.length > 0)
+    || (total > 0 && completed === 0 && blockers.length >= 2);
+
+  if (isRed) {
+    if (blockers.length > 0) reasons.push(blockers.length + ' blocker' + (blockers.length > 1 ? 's' : ''));
+    if (completed === 0 && total > 0) reasons.push('no tasks completed');
+    else if (completed === 0 && nextSteps.length > 0) reasons.push('blocked with no progress');
+    return { score: 'red', reasons: reasons };
+  }
+
+  var isYellow = (blockers.length === 1 || blockers.length === 2)
+    || (total > 0 && rate !== null && rate < 0.67)
+    || (nextSteps.length > 0 && blockers.length === 0 && completed === 0 && total > 0);
+
+  if (isYellow) {
+    if (blockers.length > 0) reasons.push(blockers.length + ' blocker' + (blockers.length > 1 ? 's' : ''));
+    if (rate !== null && rate < 0.67 && blockers.length === 0) reasons.push(Math.round(rate * 100) + '% tasks done');
+    if (nextSteps.length > 0 && blockers.length === 0 && completed === 0 && total > 0) reasons.push('work in progress');
+    return { score: 'yellow', reasons: reasons };
+  }
+
+  if (blockers.length === 0) reasons.push('no blockers');
+  if (total > 0 && rate !== null) reasons.push(completed + '/' + total + ' tasks done');
+  return { score: 'green', reasons: reasons };
+}
+
+function healthLabel(score) {
+  return score === 'green' ? 'Healthy' : score === 'yellow' ? 'Mixed' : 'Struggling';
+}
+
+function healthDotNode(health) {
+  return h('span', {
+    class:   'health-dot health-' + health.score,
+    title:   health.reasons.join(', ') || healthLabel(health.score)
+  });
+}
+
+function healthBadgeNode(health) {
+  return h('span', { class: 'health-badge health-' + health.score },
+    healthDotNode(health),
+    txt(healthLabel(health.score))
+  );
+}
+
 /* ─── state ──────────────────────────────────────────────────────────────── */
 var state = {
   projects:    [],
@@ -598,6 +677,20 @@ function buildProjectCard(p) {
     card.appendChild(h('div', { class: 'project-card-desc', text: trunc(p.lastSummary, 100) }));
   }
 
+  if (p.health) {
+    var projHealthLine = h('div', { class: 'health-project-line' },
+      h('span', { class: 'health-dot health-' + p.health.score }),
+      h('span', { style: 'color:var(--muted); font-size:11px', text: p.health.label })
+    );
+    if (p.topBlocker) {
+      projHealthLine.appendChild(
+        h('span', { style: 'color:var(--dim); font-size:11px',
+                    text: '\u00b7 ' + p.topBlocker.text.slice(0, 40) + (p.topBlocker.text.length > 40 ? '\u2026' : '') + ' (' + p.topBlocker.count + 'x)' })
+      );
+    }
+    card.appendChild(projHealthLine);
+  }
+
   card.appendChild(footer);
   return card;
 }
@@ -630,9 +723,11 @@ function sortProjects() {
 
 /* ─── session cards ──────────────────────────────────────────────────────── */
 function buildSessionCard(s, backView) {
+  var health = computeHealth(s);
   var header = h('div', { class: 'session-card-header' },
     h('div', { class: 'session-card-title', text: trunc(s.summary || 'Untitled session', 90) }),
-    h('div', { class: 'session-card-time',  text: relativeTime(s.startedAt) })
+    h('div', { class: 'session-card-time',  text: relativeTime(s.startedAt) }),
+    healthDotNode(health)
   );
 
   var meta = h('div', { class: 'session-card-meta' },
@@ -823,6 +918,13 @@ function openDetail(sessionId, backView) {
 
     var s = res.data;
     document.getElementById('detail-heading').textContent = trunc(s.summary || 'Untitled Session', 80);
+
+    var detailHealth = computeHealth(s);
+    var headingEl = document.getElementById('detail-heading');
+    // Append badge as sibling after heading
+    var badgeWrap = h('div', { style: 'margin: 4px 48px 0' });
+    badgeWrap.appendChild(healthBadgeNode(detailHealth));
+    headingEl.parentNode.insertBefore(badgeWrap, headingEl.nextSibling);
 
     // Meta row
     var meta = h('div', { class: 'detail-meta' },
