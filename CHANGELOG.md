@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-04-08
+
+### Added
+
+#### Session Snapshot & Resume
+- **`cc-sessions save [claude-session-id]`** — new CLI command to snapshot the current session immediately; run before `/clear` to preserve context
+- **`/sessions:snapshot` slash command** — skill file at `~/.claude/skills/sessions-snapshot.md`; instructs Claude to run `cc-sessions save` and report the result
+- **`cc-sessions notify`** — internal CLI entry point for the Claude Code Notification hook; detects context compaction events and auto-snapshots the session
+- **Auto-snapshot on compaction** — register the Notification hook in `~/.claude/settings.json` to automatically save a snapshot whenever Claude Code compacts context (tagged `pre-compact`)
+- **Tag badges in session cards** — sessions saved before compaction show a 📸 `pre-compact` badge; manual snapshots show a 📌 `snapshot` badge in the Sessions Browser UI
+- **"Resume in Claude Code" block** — each session detail view now shows the exact `claude --resume <id>` command with a one-click copy button (clipboard API with `execCommand` fallback)
+
+#### Hooks
+- **`src/hooks/snapshot.ts`** — shared `saveSnapshot()` helper used by both the Notification hook and the `save` CLI command; upserts sessions (no duplicates) and merges accumulated tags across multiple saves
+
+### Technical Details
+- Notification hook (`src/hooks/notification.ts`) respects `autoSave.enabled` config flag; all output to stderr gated by `CC_MEMORY_DEBUG`; always exits 0
+- Upsert strategy: `getByClaudeSessionId()` look-up → reuse existing `id` on `INSERT OR REPLACE`; tags from multiple saves are merged via Set (no loss)
+- 8 new tests: `tests/hooks/snapshot.test.ts` (4), `tests/hooks/notification.test.ts` (7 — grew from 4 during review), `tests/server/ui-badges.test.ts` (3), `tests/server/ui-resume.test.ts` (5)
+- Total test count: 154
+
+#### Hook registration
+
+To enable auto-snapshot on compaction, add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Notification": [
+      { "matcher": "", "hooks": [{ "type": "command", "command": "cc-sessions notify" }] }
+    ]
+  }
+}
+```
+
+---
+
 ## [1.3.1] - 2026-04-08
 
 ### Added

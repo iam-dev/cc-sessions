@@ -13,6 +13,8 @@ Pick up exactly where you left off - even months later.
 - **Smart Resume** - Resume any session with full context restoration
 - **Cross-Project Memory** - Access memories from any project
 - **Periodic Auto-Save** - Checkpoint saves every 5 minutes protect against data loss
+- **Pre-Clear Snapshots** - Save a snapshot before `/clear` with `cc-sessions save`; auto-snapshot on compaction via the Notification hook
+- **Resume in Claude Code** - Every session shows the exact `claude --resume <id>` command so you can reopen it at any point
 - **Cloud Sync (Pro)** - Sync sessions across devices with end-to-end encryption
 
 ## Installation
@@ -122,6 +124,83 @@ View and configure memory settings.
 /sessions:settings
 ```
 
+### `/sessions:snapshot`
+Save the current session immediately — use this before running `/clear` to preserve your context.
+
+```
+/sessions:snapshot
+```
+
+Runs `cc-sessions save` and shows the result. Requires the skill file at `~/.claude/skills/sessions-snapshot.md` (installed automatically when you run `cc-sessions save` for the first time, or manually via the hook setup below).
+
+## Snapshots & Resume
+
+### Save before `/clear`
+
+Before clearing context, snapshot the current session so you can resume it later:
+
+```bash
+cc-sessions save
+```
+
+Output:
+```
+✅ Session saved: abc123-def456 (pre-clear snapshot)
+```
+
+The session appears in the UI with a 📌 snapshot badge. To resume it in Claude Code:
+
+```bash
+claude --resume abc123-def456
+```
+
+The `claude --resume` command is also shown with a copy button in the session detail view of the Sessions Browser UI.
+
+### Auto-snapshot on compaction
+
+Register the Notification hook to automatically save a snapshot whenever Claude Code compacts context:
+
+```json
+// ~/.claude/settings.json
+{
+  "hooks": {
+    "Notification": [
+      { "matcher": "", "hooks": [{ "type": "command", "command": "cc-sessions notify" }] }
+    ]
+  }
+}
+```
+
+Auto-snapshotted sessions are tagged `pre-compact` (📸 badge in the UI). The hook always exits 0 and never interrupts your session. Enable debug output with `CC_MEMORY_DEBUG=1`.
+
+---
+
+## Importing Existing Sessions
+
+If you have existing Claude Code CLI sessions in `~/.claude/projects/`, import them all with:
+
+```bash
+cc-sessions import --limit 9999
+```
+
+> **Important:** The default `--limit` is 100. Always pass `--limit 9999` (or higher) to import your full history.
+
+```bash
+# Preview what would be imported (dry run)
+cc-sessions import --dry-run --limit 9999
+
+# Import only a specific project
+cc-sessions import --project ./myapp --limit 9999
+
+# Import without AI summaries (faster)
+cc-sessions import --no-ai --limit 9999
+
+# Import sessions since a date
+cc-sessions import --since 2026-01-01 --limit 9999
+```
+
+Re-running import is always safe — sessions already in the database are automatically skipped.
+
 ## Configuration
 
 Configuration is stored in `~/.cc-sessions/config.yml`:
@@ -173,18 +252,23 @@ cc-sessions/
 │   └── plugin.json       # Plugin manifest
 ├── commands/             # Slash commands (/sessions, /sessions:search, etc.)
 ├── hooks/
-│   ├── hooks.json        # Hook configuration
-│   ├── session-start.ts  # Shows last session on startup
-│   ├── session-end.ts    # Saves session on exit
-│   └── periodic-save.ts  # Auto-saves every 5 minutes
+│   ├── hooks.json         # Hook configuration
+│   ├── session-start.ts   # Shows last session on startup
+│   ├── session-end.ts     # Saves session on exit
+│   ├── periodic-save.ts   # Auto-saves every 5 minutes
+│   ├── notification.ts    # Auto-snapshots on compaction (Notification hook)
+│   └── snapshot.ts        # Shared saveSnapshot() helper
 └── src/                  # Core implementation
 ```
 
 ### Session Lifecycle
 
-1. **SessionStart Hook** - When you start Claude Code, cc-sessions shows your last session summary
-2. **Periodic Save Hook** - Every 5 minutes, a checkpoint is saved to protect against data loss
-3. **SessionEnd Hook** - When you end the session, a full summary is generated and saved
+1. **SessionStart Hook** — When you start Claude Code, cc-sessions shows your last session summary
+2. **Periodic Save Hook** — Every 5 minutes, a checkpoint is saved to protect against data loss
+3. **Notification Hook** — When Claude Code compacts context, a pre-compact snapshot is auto-saved (requires hook registration)
+4. **Manual Snapshot** — Run `cc-sessions save` (or `/sessions:snapshot`) before `/clear` to preserve context
+5. **SessionEnd Hook** — When you end the session, a full summary is generated and saved
+6. **Resume** — Use `claude --resume <id>` (shown in the UI) to reopen any saved session
 
 ### Data Storage
 
