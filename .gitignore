@@ -24,3 +24,5 @@ specs/
 
 # environment variables
 .env
+
+docs/superpowers
