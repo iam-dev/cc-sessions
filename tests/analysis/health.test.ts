@@ -122,6 +122,24 @@ describe('computeHealth', () => {
       expect(result.reasons).toContain('work in progress');
     });
 
+    it('returns yellow at 2/3 completion (0.6667 < 0.67 threshold)', () => {
+      // 2/3 ≈ 0.6667, which is strictly less than 0.67, so it does not meet the green threshold
+      const result = computeHealth(
+        makeSession({ tasksCompleted: 2, tasksPending: 1, blockers: [] })
+      );
+      expect(result.score).toBe('yellow');
+      expect(result.reasons).toContain('67% tasks done');
+    });
+
+    it('returns green at 67/100 completion (0.67 exactly meets threshold)', () => {
+      // 67/100 = 0.67 exactly, which is NOT < 0.67, so the yellow condition is false
+      const result = computeHealth(
+        makeSession({ tasksCompleted: 67, tasksPending: 33, blockers: [] })
+      );
+      expect(result.score).toBe('green');
+      expect(result.reasons).toContain('67/100 tasks done');
+    });
+
     it('uses blocker reason over completion rate reason when both apply', () => {
       // 1 blocker + low completion: blocker reason takes priority
       const result = computeHealth(
