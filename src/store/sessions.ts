@@ -471,6 +471,7 @@ export class SessionStore {
         MAX(s.started_at)                      AS last_session_at,
         SUM(s.tokens_used)                     AS total_tokens,
         SUM(s.duration)                        AS total_duration,
+        SUM(s.tasks_completed)                 AS total_tasks_completed,
         (
           SELECT summary
           FROM   sessions sub
@@ -492,7 +493,8 @@ export class SessionStore {
       lastSessionAt: new Date(Number(row['last_session_at'])),
       lastSummary:   row['last_summary'] ? String(row['last_summary']) : '',
       totalTokens:   Number(row['total_tokens'])  || 0,
-      totalDuration: Number(row['total_duration']) || 0,
+      totalDuration:        Number(row['total_duration'])        || 0,
+      totalTasksCompleted:  Number(row['total_tasks_completed']) || 0,
     }));
   }
 

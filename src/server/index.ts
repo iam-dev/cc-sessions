@@ -10,6 +10,8 @@
 
 import * as http from 'http';
 import * as url from 'url';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SessionStore } from '../store/sessions';
 import { getUIHtml } from './ui';
 
@@ -92,6 +94,18 @@ function handleRoot(_req: http.IncomingMessage, res: http.ServerResponse): void 
   sendHtml(res, getUIHtml());
 }
 
+/**
+ * Extract a project path from a path like /api/projects/:path.
+ * Returns the decoded path string, or null if the path does not match.
+ */
+function parseProjectPath(pathname: string): string | null {
+  const prefix = '/api/projects/';
+  if (!pathname.startsWith(prefix)) return null;
+  const segment = pathname.slice(prefix.length);
+  if (!segment || segment.includes('/')) return null;
+  return decodeURIComponent(segment);
+}
+
 /** GET /api/projects */
 function handleProjects(
   _req: http.IncomingMessage,
@@ -100,6 +114,41 @@ function handleProjects(
 ): void {
   const projects = store.getProjects();
   sendJson(res, 200, { data: projects });
+}
+
+/** GET /api/projects/:path */
+function handleProjectByPath(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse,
+  store: SessionStore,
+  projectPath: string,
+): void {
+  const allProjects = store.getProjects();
+  const summary = allProjects.find(p => p.projectPath === projectPath);
+  if (!summary) {
+    sendJson(res, 404, { error: 'Project not found: ' + projectPath });
+    return;
+  }
+
+  // Read README.md from the project directory; create one if absent
+  const readmePath = path.join(projectPath, 'README.md');
+  let readmeContent = '';
+  try {
+    readmeContent = fs.readFileSync(readmePath, 'utf8');
+  } catch {
+    const defaultReadme =
+      `# ${summary.projectName}\n\n` +
+      `> Add a description of this project here.\n`;
+    try {
+      fs.writeFileSync(readmePath, defaultReadme, 'utf8');
+      readmeContent = defaultReadme;
+    } catch {
+      // Project dir may not be writable — leave readmeContent empty
+    }
+  }
+
+  const recentSessions = store.getRecent(5, projectPath);
+  sendJson(res, 200, { data: { ...summary, recentSessions, readmeContent } });
 }
 
 /** GET /api/sessions[?project=path&limit=N] */
@@ -198,6 +247,12 @@ function route(
 
   if (pathname === '/api/projects') {
     handleProjects(req, res, store);
+    return;
+  }
+
+  const projectPath = parseProjectPath(pathname);
+  if (projectPath !== null) {
+    handleProjectByPath(req, res, store, projectPath);
     return;
   }
 

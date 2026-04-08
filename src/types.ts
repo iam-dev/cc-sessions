@@ -266,6 +266,8 @@ export interface ProjectSummary {
   totalTokens: number;
   /** Sum of duration (minutes) across all non-archived sessions */
   totalDuration: number;
+  /** Sum of tasks_completed across all non-archived sessions */
+  totalTasksCompleted: number;
 }
 
 // ============================================

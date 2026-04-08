@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-08
+
+### Added
+
+#### Project Summary View
+- **New Project Summary view** — clicking a project card now opens a dedicated summary page instead of going straight to the sessions list
+- **Aggregate stat cards** — displays Sessions, Tokens, Duration, and Tasks Done for each project at a glance
+- **README section** — reads `README.md` from the project directory and renders it as formatted Markdown; auto-creates a starter `README.md` if none exists
+- **Markdown rendering** — uses `marked` + `DOMPurify` (loaded from jsDelivr CDN) for safe, styled Markdown output in the dark theme
+- **Recent Activity section** — shows the 5 most recent sessions directly on the summary page
+- **Browse All Sessions button** — navigates from the summary view into the full sessions list for that project
+- **Back-label support** — detail view back button correctly shows the project name when navigating from the summary view
+
+#### API
+- **`GET /api/projects/:path`** — new endpoint returning a project's `ProjectSummary`, `recentSessions` (last 5), and `readmeContent`
+
+#### Data
+- **`totalTasksCompleted`** added to `ProjectSummary` type and `getProjects()` SQL query (`SUM(tasks_completed)`)
+
+---
+
 ## [1.2.1] - 2026-04-08
 
 ### Fixed

@@ -199,7 +199,65 @@ export function getUIHtml(): string {
     ::-webkit-scrollbar-track        { background: transparent; }
     ::-webkit-scrollbar-thumb        { background: #3a3a3a; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover  { background: #4a4a4a; }
+
+    /* ── Project Summary ──────────────────────────────────────────────────────── */
+    .proj-summary-stats { display: flex; gap: 24px; flex-wrap: wrap; padding: 0 48px 24px; }
+    .proj-summary-stat {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px 20px; display: flex; flex-direction: column; gap: 4px; min-width: 110px;
+    }
+    .proj-summary-stat-value { font-size: 22px; font-weight: 600; color: var(--text); }
+    .proj-summary-stat-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+    .proj-summary-section { padding: 0 48px 24px; }
+    .proj-summary-section-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--dim); margin-bottom: 12px;
+    }
+    .proj-summary-recent { display: flex; flex-direction: column; gap: 8px; }
+    .proj-summary-browse {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin: 4px 48px 48px; padding: 9px 18px;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--muted);
+      transition: background .12s, border-color .12s, color .12s; width: fit-content;
+    }
+    .proj-summary-browse:hover { background: var(--card-hover); border-color: #4a4a4a; color: var(--text); }
+    .proj-summary-readme {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 18px 24px; font-size: 13.5px; line-height: 1.7;
+      color: var(--muted); word-break: break-word;
+    }
+    .proj-summary-readme h1,.proj-summary-readme h2,.proj-summary-readme h3 {
+      color: var(--text); margin: 16px 0 8px; font-weight: 600;
+    }
+    .proj-summary-readme h1 { font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .proj-summary-readme h2 { font-size: 16px; }
+    .proj-summary-readme h3 { font-size: 14px; }
+    .proj-summary-readme p  { margin: 0 0 10px; }
+    .proj-summary-readme ul,.proj-summary-readme ol { padding-left: 22px; margin: 0 0 10px; }
+    .proj-summary-readme li { margin-bottom: 4px; }
+    .proj-summary-readme code {
+      background: #2a2a2a; border-radius: 4px; padding: 1px 5px;
+      font-size: 12px; font-family: 'SF Mono', monospace; color: #e0e0e0;
+    }
+    .proj-summary-readme pre {
+      background: #1a1a1a; border: 1px solid var(--border); border-radius: 6px;
+      padding: 12px 16px; overflow-x: auto; margin: 0 0 12px;
+    }
+    .proj-summary-readme pre code { background: none; padding: 0; }
+    .proj-summary-readme blockquote {
+      border-left: 3px solid #4a4a4a; margin: 0 0 10px; padding: 4px 14px;
+      color: var(--dim);
+    }
+    .proj-summary-readme a { color: #7eb8f7; text-decoration: none; }
+    .proj-summary-readme a:hover { text-decoration: underline; }
+    .proj-summary-readme hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+    .proj-summary-readme-empty {
+      font-style: italic; color: var(--dim);
+    }
   </style>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 </head>
 <body>
 
@@ -295,6 +353,26 @@ export function getUIHtml(): string {
     <div class="view-header"><h1 class="view-title">Search Results</h1></div>
     <div class="search-note" id="search-note"></div>
     <div class="sessions-list" id="search-list"></div>
+  </div>
+
+  <div class="view" id="view-proj-summary">
+    <div class="back-btn" id="proj-summary-back">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Projects
+    </div>
+    <div class="view-header"><h1 class="view-title" id="proj-summary-title"></h1></div>
+    <div class="proj-summary-stats" id="proj-summary-stats"></div>
+    <div class="proj-summary-section" id="proj-summary-readme-section">
+      <div class="proj-summary-section-title">README</div>
+      <div class="proj-summary-readme" id="proj-summary-readme"></div>
+    </div>
+    <div class="proj-summary-section">
+      <div class="proj-summary-section-title">Recent Activity</div>
+      <div class="proj-summary-recent" id="proj-summary-recent"></div>
+    </div>
+    <div class="proj-summary-browse" id="proj-summary-browse-btn">Browse All Sessions \u2192</div>
   </div>
 </main>
 
@@ -431,7 +509,7 @@ function buildProjectCard(p) {
   );
 
   var card = h('div', { class: 'project-card',
-                         click: function() { openProject(p.projectPath, p.projectName); } },
+                         click: function() { openProjectSummary(p.projectPath, p.projectName); } },
     h('div', { class: 'project-card-name', text: p.projectName })
   );
 
@@ -568,6 +646,49 @@ function openProject(projectPath, projectName) {
     });
 }
 
+function openProjectSummary(projectPath, projectName) {
+  document.getElementById('proj-summary-title').textContent = projectName;
+  document.getElementById('proj-summary-browse-btn').setAttribute('data-path', projectPath);
+  showView('proj-summary');
+
+  var statsEl  = document.getElementById('proj-summary-stats');
+  var recentEl = document.getElementById('proj-summary-recent');
+  clearEl(statsEl); clearEl(recentEl);
+  statsEl.appendChild(loadingNode());
+
+  get('/api/projects/' + encodeURIComponent(projectPath)).then(function(res) {
+    clearEl(statsEl); clearEl(recentEl);
+    if (res.error || !res.data) { statsEl.appendChild(emptyNode('', 'Not found', '')); return; }
+    var d = res.data;
+    statsEl.appendChild(projSummaryStat(String(d.sessionCount), 'Sessions'));
+    statsEl.appendChild(projSummaryStat(formatTokens(d.totalTokens), 'Tokens'));
+    statsEl.appendChild(projSummaryStat(formatDuration(d.totalDuration), 'Duration'));
+    statsEl.appendChild(projSummaryStat(String(d.totalTasksCompleted), 'Tasks Done'));
+
+    // README — rendered via marked + DOMPurify
+    var readmeEl = document.getElementById('proj-summary-readme');
+    if (d.readmeContent && d.readmeContent.trim()) {
+      var rawHtml = window.marked ? window.marked.parse(d.readmeContent) : d.readmeContent.replace(/[<>&"]/g, function(c) { return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; });
+      readmeEl.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(rawHtml) : rawHtml;
+      readmeEl.classList.remove('proj-summary-readme-empty');
+    } else {
+      readmeEl.textContent = 'No README found for this project.';
+      readmeEl.classList.add('proj-summary-readme-empty');
+    }
+
+    var sessions = d.recentSessions || [];
+    if (!sessions.length) { recentEl.appendChild(emptyNode('\uD83D\uDD50', 'No sessions yet', '')); }
+    else sessions.forEach(function(s) { recentEl.appendChild(buildSessionCard(s, 'proj-summary')); });
+  });
+}
+
+function projSummaryStat(value, label) {
+  return h('div', { class: 'proj-summary-stat' },
+    h('span', { class: 'proj-summary-stat-value', text: value }),
+    h('span', { class: 'proj-summary-stat-label', text: label })
+  );
+}
+
 function openAll() {
   showView('all');
   var list = document.getElementById('all-list');
@@ -587,6 +708,7 @@ function openDetail(sessionId, backView) {
     'projects':      'Projects',
     'all':           'All Sessions',
     'proj-sessions': document.getElementById('proj-title').textContent || 'Sessions',
+    'proj-summary':  document.getElementById('proj-summary-title').textContent || 'Project',
     'search':        'Search Results',
   };
   document.getElementById('detail-back-label').textContent = labels[state.backView] || 'Back';
@@ -742,6 +864,16 @@ document.getElementById('all-back').addEventListener('click',    function() { sh
 document.getElementById('proj-back').addEventListener('click',   function() { showView('projects'); });
 document.getElementById('search-back').addEventListener('click', function() { showView('projects'); });
 document.getElementById('detail-back').addEventListener('click', function() { showView(state.backView); });
+
+document.getElementById('proj-summary-back').addEventListener('click', function() {
+  showView('projects');
+});
+document.getElementById('proj-summary-browse-btn').addEventListener('click', function() {
+  var btn   = document.getElementById('proj-summary-browse-btn');
+  var path  = btn.getAttribute('data-path');
+  var title = document.getElementById('proj-summary-title').textContent;
+  if (path) openProject(path, title);
+});
 
 document.getElementById('proj-filter').addEventListener('input', function(e) {
   var q = e.target.value.trim().toLowerCase();

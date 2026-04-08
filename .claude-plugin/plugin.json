@@ -1,6 +1,6 @@
 {
   "name": "cc-sessions",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "Never lose context again. Smart session memory with extended retention for Claude Code.",
   "author": {
     "name": "iam-dev",
