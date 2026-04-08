@@ -583,9 +583,19 @@ function computeHealth(s) {
     || (total > 0 && completed === 0 && blockers.length >= 2);
 
   if (isRed) {
-    if (blockers.length > 0) reasons.push(blockers.length + ' blocker' + (blockers.length > 1 ? 's' : ''));
-    if (completed === 0 && total > 0) reasons.push('no tasks completed');
-    else if (completed === 0 && nextSteps.length > 0) reasons.push('blocked with no progress');
+    var isRedManyBlockers = blockers.length >= 3;
+    var isRedBlockedNoProgress = blockers.length >= 1 && completed === 0 && nextSteps.length > 0;
+    var isRedNoTasksCompleted = total > 0 && completed === 0 && blockers.length >= 2;
+
+    if (isRedManyBlockers) {
+      reasons.push(blockers.length + ' blockers');
+    } else {
+      if (blockers.length > 0) reasons.push(blockers.length + ' blocker' + (blockers.length > 1 ? 's' : ''));
+      if (isRedBlockedNoProgress) reasons.push('blocked with no progress');
+    }
+    if (isRedNoTasksCompleted && !isRedManyBlockers && !isRedBlockedNoProgress) {
+      reasons.push('no tasks completed');
+    }
     return { score: 'red', reasons: reasons };
   }
 
@@ -594,9 +604,13 @@ function computeHealth(s) {
     || (nextSteps.length > 0 && blockers.length === 0 && completed === 0 && total > 0);
 
   if (isYellow) {
-    if (blockers.length > 0) reasons.push(blockers.length + ' blocker' + (blockers.length > 1 ? 's' : ''));
-    if (rate !== null && rate < 0.67 && blockers.length === 0) reasons.push(Math.round(rate * 100) + '% tasks done');
-    if (nextSteps.length > 0 && blockers.length === 0 && completed === 0 && total > 0) reasons.push('work in progress');
+    if (blockers.length > 0) {
+      reasons.push(blockers.length + ' blocker' + (blockers.length > 1 ? 's' : ''));
+    } else if (rate !== null && rate < 0.67 && total > 0) {
+      reasons.push(Math.round(rate * 100) + '% tasks done');
+    } else if (nextSteps.length > 0 && completed === 0 && total > 0) {
+      reasons.push('work in progress');
+    }
     return { score: 'yellow', reasons: reasons };
   }
 
@@ -920,11 +934,9 @@ function openDetail(sessionId, backView) {
     document.getElementById('detail-heading').textContent = trunc(s.summary || 'Untitled Session', 80);
 
     var detailHealth = computeHealth(s);
-    var headingEl = document.getElementById('detail-heading');
-    // Append badge as sibling after heading
-    var badgeWrap = h('div', { style: 'margin: 4px 48px 0' });
+    var badgeWrap = h('div', { style: 'padding: 0 48px 8px' });
     badgeWrap.appendChild(healthBadgeNode(detailHealth));
-    headingEl.parentNode.insertBefore(badgeWrap, headingEl.nextSibling);
+    body.appendChild(badgeWrap);
 
     // Meta row
     var meta = h('div', { class: 'detail-meta' },
