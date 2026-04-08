@@ -94,6 +94,44 @@ store.save({
 
 Get a session by its ID.
 
+---
+
+## REST API
+
+The Sessions Browser UI is served by a built-in HTTP server (`cc-sessions ui`) that exposes the following JSON endpoints.
+
+### GET /api/sessions/:id
+
+Returns a single `SessionMemory` object by ID.
+
+```
+GET /api/sessions/mem_abc123
+→ { data: SessionMemory }
+```
+
+### GET /api/sessions/:id/messages
+
+Returns all human/assistant messages from the session's JSONL log file, in conversation order. Useful for reading the full transcript of a session.
+
+```
+GET /api/sessions/mem_abc123/messages
+→ { data: Message[] }
+```
+
+#### Message object
+
+```typescript
+interface Message {
+  role: 'user' | 'assistant';
+  text: string;       // Full message text, whitespace-normalized
+  timestamp: string;  // ISO 8601 string, empty if absent in log
+}
+```
+
+Returns `404` if the session or its log file cannot be found.
+
+---
+
 ```typescript
 const session = store.getById('mem_abc123');
 if (session) {

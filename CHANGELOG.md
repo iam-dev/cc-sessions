@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-04-08
+
+### Added
+
+#### Sessions Browser UI
+- **Message thread viewer** — the "💬 N messages" badge in the session detail view is now clickable; clicking it expands a collapsible thread showing the full conversation between you and Claude, loaded lazily on first open
+- **`GET /api/sessions/:id/messages`** — new REST endpoint that reads the session's JSONL log file and returns all human/assistant messages as `{role, text, timestamp}[]` in conversation order
+
+---
+
 ## [1.5.0] - 2026-04-08
 
 ### Added

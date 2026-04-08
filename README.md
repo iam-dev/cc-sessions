@@ -15,6 +15,7 @@ Pick up exactly where you left off - even months later.
 - **Periodic Auto-Save** - Checkpoint saves every 5 minutes protect against data loss
 - **Pre-Clear Snapshots** - Save before `/clear` with `cc-sessions save` or `/sessions:clear`; auto-snapshot on `/clear` via the SessionStart hook; auto-snapshot on compaction via the Notification hook
 - **Resume in Claude Code** - Every session shows the exact `claude --resume <id>` command so you can reopen it at any point
+- **Message Thread Viewer** - Click the "💬 N messages" badge in any session detail view to expand the full conversation thread inline
 - **Cloud Sync (Pro)** - Sync sessions across devices with end-to-end encryption
 
 ## Installation

@@ -283,6 +283,30 @@ export function getUIHtml(): string {
     .proj-summary-readme-empty {
       font-style: italic; color: var(--dim);
     }
+
+    /* ── Messages thread ──────────────────────────────────────────── */
+    .msg-toggle {
+      cursor: pointer; padding: 2px 8px; border-radius: 4px;
+      background: #2a2a2a; border: 1px solid var(--border);
+      font-size: 12px; color: var(--muted); user-select: none;
+      transition: color .12s, border-color .12s;
+    }
+    .msg-toggle:hover { color: var(--text); border-color: #555; }
+    .msg-thread { margin-bottom: 24px; }
+    .msg-list { display: flex; flex-direction: column; gap: 14px; padding-top: 12px; }
+    .msg-item { display: flex; flex-direction: column; gap: 4px; }
+    .msg-role {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--dim);
+    }
+    .msg-role.user { color: var(--accent); }
+    .msg-bubble {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px; font-size: 13px;
+      line-height: 1.65; color: var(--muted);
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .msg-bubble.user { border-color: #3a2e20; color: var(--text); }
   </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
@@ -806,8 +830,24 @@ function openDetail(sessionId, backView) {
       h('span', { text: '\u23F1 ' + formatDuration(s.duration) }),
       h('span', { text: '\uD83D\uDD24 ' + formatTokens(s.tokensUsed) + ' tokens' })
     );
-    if (s.messagesCount) meta.appendChild(h('span', { text: '\uD83D\uDCAC ' + s.messagesCount + ' messages' }));
+    var msgThread = h('div', { class: 'msg-thread', style: 'display:none' });
+    if (s.messagesCount) {
+      var msgLoaded = false;
+      var msgOpen = false;
+      var msgBtn = h('span', { class: 'msg-toggle' });
+      msgBtn.textContent = '\uD83D\uDCAC ' + s.messagesCount + ' messages \u25be';
+      (function(sid, count) {
+        msgBtn.addEventListener('click', function() {
+          msgOpen = !msgOpen;
+          msgThread.style.display = msgOpen ? '' : 'none';
+          msgBtn.textContent = '\uD83D\uDCAC ' + count + ' messages ' + (msgOpen ? '\u25b4' : '\u25be');
+          if (msgOpen && !msgLoaded) { msgLoaded = true; loadMessages(sid, msgThread); }
+        });
+      })(s.id, s.messagesCount);
+      meta.appendChild(msgBtn);
+    }
     body.appendChild(meta);
+    body.appendChild(msgThread);
 
     // Description
     if (s.description) {
@@ -886,6 +926,26 @@ function openDetail(sessionId, backView) {
     var footer = h('div', { class: 'detail-id' });
     footer.textContent = 'Session ID: ' + s.id;
     body.appendChild(footer);
+  });
+}
+
+function loadMessages(sessionId, container) {
+  clearEl(container);
+  container.appendChild(loadingNode());
+  get('/api/sessions/' + encodeURIComponent(sessionId) + '/messages').then(function(res) {
+    clearEl(container);
+    if (res.error || !res.data || !res.data.length) {
+      container.appendChild(h('div', { class: 'detail-desc', text: 'No messages found.' }));
+      return;
+    }
+    var list = h('div', { class: 'msg-list' });
+    res.data.forEach(function(msg) {
+      list.appendChild(h('div', { class: 'msg-item' },
+        h('div', { class: 'msg-role ' + msg.role, text: msg.role === 'user' ? 'You' : 'Claude' }),
+        h('div', { class: 'msg-bubble ' + msg.role, text: msg.text })
+      ));
+    });
+    container.appendChild(list);
   });
 }
 

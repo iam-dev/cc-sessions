@@ -77,6 +77,19 @@ function parseSessionId(pathname: string): string | null {
 }
 
 /**
+ * Extract a session id from a path like /api/sessions/:id/messages.
+ * Returns the decoded id, or null if the path does not match.
+ */
+function parseSessionMessagesPath(pathname: string): string | null {
+  const prefix = '/api/sessions/';
+  const suffix = '/messages';
+  if (!pathname.startsWith(prefix) || !pathname.endsWith(suffix)) return null;
+  const segment = pathname.slice(prefix.length, -suffix.length);
+  if (!segment || segment.includes('/')) return null;
+  return decodeURIComponent(segment);
+}
+
+/**
  * Parse an integer query parameter.
  * Returns null when the parameter is absent, NaN when it is present but invalid.
  */
@@ -187,6 +200,74 @@ function handleSessionById(
   sendJson(res, 200, { data: session });
 }
 
+/** GET /api/sessions/:id/messages */
+function handleSessionMessages(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse,
+  store: SessionStore,
+  sessionId: string,
+): void {
+  const session = store.getById(sessionId);
+  if (!session) {
+    sendJson(res, 404, { error: 'Session not found: ' + sessionId });
+    return;
+  }
+
+  const logFile = session.logFile;
+  if (!logFile || !fs.existsSync(logFile)) {
+    sendJson(res, 404, { error: 'Log file not found' });
+    return;
+  }
+
+  let content: string;
+  try {
+    content = fs.readFileSync(logFile, 'utf-8');
+  } catch {
+    sendJson(res, 500, { error: 'Failed to read log file' });
+    return;
+  }
+
+  const lines = content.split('\n').filter(line => line.trim());
+  const messages: Array<{ role: string; text: string; timestamp: string }> = [];
+
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line) as Record<string, unknown>;
+      if (entry['type'] !== 'human' && entry['type'] !== 'assistant') continue;
+
+      let text = '';
+      const entryContent = entry['content'];
+      const entryMessage = entry['message'] as Record<string, unknown> | undefined;
+
+      if (typeof entryContent === 'string') {
+        text = entryContent;
+      } else if (entryMessage?.['content']) {
+        const c = entryMessage['content'];
+        if (typeof c === 'string') {
+          text = c;
+        } else if (Array.isArray(c)) {
+          text = (c as Array<{ type: string; text?: string }>)
+            .filter(b => b.type === 'text')
+            .map(b => b.text ?? '')
+            .join('\n');
+        }
+      }
+
+      if (!text.trim()) continue;
+
+      messages.push({
+        role: entry['type'] === 'human' ? 'user' : 'assistant',
+        text: text.trim(),
+        timestamp: typeof entry['timestamp'] === 'string' ? entry['timestamp'] : '',
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  sendJson(res, 200, { data: messages });
+}
+
 /** GET /api/search?q=query[&limit=N] */
 function handleSearch(
   req: http.IncomingMessage,
@@ -258,6 +339,12 @@ function route(
 
   if (pathname === '/api/sessions') {
     handleSessions(req, res, store);
+    return;
+  }
+
+  const messagesSessionId = parseSessionMessagesPath(pathname);
+  if (messagesSessionId !== null) {
+    handleSessionMessages(req, res, store, messagesSessionId);
     return;
   }
 
