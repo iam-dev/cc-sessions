@@ -66,10 +66,18 @@ function buildPrompt(parsed: ParsedSession): string {
 
 function runClaude(prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+
     const controller = new AbortController();
     const timer = setTimeout(() => {
+      done(() => reject(new Error('claude CLI timeout')));
       controller.abort();
-      reject(new Error('claude CLI timeout'));
     }, TIMEOUT_MS);
 
     let stdout = '';
@@ -83,16 +91,14 @@ function runClaude(prompt: string): Promise<string> {
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
     child.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
+      done(() => reject(err));
     });
 
     child.on('close', (code) => {
-      clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error(`claude exited ${code}: ${stderr.slice(0, 200)}`));
+        done(() => reject(new Error(`claude exited ${code}: ${stderr.slice(0, 200)}`)));
       } else {
-        resolve(stdout);
+        done(() => resolve(stdout));
       }
     });
   });
