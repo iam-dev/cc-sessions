@@ -24,6 +24,9 @@
   ],
   "author": "iam-dev",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
     "@aws-sdk/client-s3": "^3.500.0",
