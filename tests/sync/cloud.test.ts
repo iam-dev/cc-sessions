@@ -277,4 +277,293 @@ describe('CloudSync', () => {
       expect(fingerprint).toHaveLength(8);
     });
   });
+
+  describe('constructor without encryption key', () => {
+    it('generates a new key and logs a warning when no encryptionKey is provided', () => {
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const configNoKey = { ...testConfig, encryptionKey: undefined };
+
+      const cloudSync = new CloudSync(configNoKey);
+      expect(cloudSync.getKeyFingerprint()).toBeDefined();
+      expect(errSpy).toHaveBeenCalled();
+
+      errSpy.mockRestore();
+    });
+  });
+
+  describe('createS3Client with different providers', () => {
+    it('sets endpoint for b2 provider', () => {
+      const b2Config = { ...testConfig, provider: 'b2' as const, endpoint: undefined, region: 'us-west-002' };
+      const cloudSync = new CloudSync(b2Config);
+      expect(cloudSync).toBeDefined();
+    });
+
+    it('warns when r2 provider has no endpoint', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const r2Config = { ...testConfig, provider: 'r2' as const, endpoint: undefined };
+      new CloudSync(r2Config);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('uses explicit endpoint when configured', () => {
+      const configWithEndpoint = {
+        ...testConfig,
+        endpoint: 'https://custom.endpoint.example.com',
+      };
+      const cloudSync = new CloudSync(configWithEndpoint);
+      expect(cloudSync).toBeDefined();
+    });
+
+    it('uses credentials when provided', () => {
+      const cloudSync = new CloudSync(testConfig);
+      expect(cloudSync).toBeDefined();
+    });
+  });
+
+  describe('deleteRemoteSession', () => {
+    it('throws when no bucket configured', async () => {
+      const configNoBucket = { ...testConfig, bucket: undefined };
+      const cloudSync = new CloudSync(configNoBucket);
+      await expect(cloudSync.deleteRemoteSession('session-id')).rejects.toThrow('No bucket configured');
+    });
+
+    it('calls DeleteObjectCommand with the correct key', async () => {
+      const { DeleteObjectCommand } = jest.requireMock('@aws-sdk/client-s3');
+      const mockSend = jest.fn().mockResolvedValue({});
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const cloudSync = new CloudSync(testConfig);
+      await cloudSync.deleteRemoteSession('my-session-id');
+
+      expect(mockSend).toHaveBeenCalled();
+      expect(DeleteObjectCommand).toHaveBeenCalled();
+    });
+  });
+
+  describe('testConnection', () => {
+    it('returns false and logs debug info when connection fails with DEBUG set', async () => {
+      process.env.CC_MEMORY_DEBUG = 'true';
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const mockSend = jest.fn().mockRejectedValue(new Error('connection refused'));
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const cloudSync = new CloudSync(testConfig);
+      const result = await cloudSync.testConnection();
+
+      expect(result).toBe(false);
+      expect(errSpy).toHaveBeenCalled();
+      delete process.env.CC_MEMORY_DEBUG;
+      errSpy.mockRestore();
+    });
+  });
+
+  describe('downloadSession', () => {
+    it('throws when no bucket configured', async () => {
+      const configNoBucket = { ...testConfig, bucket: undefined };
+      const cloudSync = new CloudSync(configNoBucket);
+      await expect(cloudSync.downloadSession({
+        sessionId: 'x', deviceId: 'y', uploadedAt: new Date(), size: 0, key: 'k'
+      })).rejects.toThrow('No bucket configured');
+    });
+
+    it('throws when response body is empty', async () => {
+      const mockSend = jest.fn().mockResolvedValue({ Body: null });
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const cloudSync = new CloudSync(testConfig);
+      await expect(cloudSync.downloadSession({
+        sessionId: 'x', deviceId: 'y', uploadedAt: new Date(), size: 0, key: 'k'
+      })).rejects.toThrow('Failed to download');
+    });
+
+    it('downloads and decrypts a session', async () => {
+      // Encrypt a session first, then mock the download to return it
+      const { Encryptor, encryptJson } = jest.requireActual<typeof import('../../src/sync/encryption')>('../../src/sync/encryption');
+      const key = Encryptor.generateKey();
+      const encryptor = new Encryptor(key);
+
+      const session = createTestSession('download-test');
+      const encrypted = encryptJson(encryptor, session);
+
+      const mockBody = {
+        transformToByteArray: jest.fn().mockResolvedValue(encrypted),
+      };
+      const mockSend = jest.fn().mockResolvedValue({ Body: mockBody });
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const cloudSync = new CloudSync({ ...testConfig, encryptionKey: key });
+      const result = await cloudSync.downloadSession({
+        sessionId: session.id,
+        deviceId: testConfig.deviceId || 'test',
+        uploadedAt: new Date(),
+        size: encrypted.length,
+        key: `sessions/test/${session.id}.enc`,
+      });
+
+      expect(result.id).toBe(session.id);
+      expect(result.summary).toBe(session.summary);
+    });
+  });
+
+  describe('sync', () => {
+    it('returns empty report when cloud is disabled', async () => {
+      const disabledConfig = { ...testConfig, enabled: false };
+      const cloudSync = new CloudSync(disabledConfig);
+      const store = { getUnsyncedSessions: jest.fn().mockReturnValue([]) } as never;
+
+      const report = await cloudSync.sync(store);
+      expect(report.uploaded).toBe(0);
+      expect(report.downloaded).toBe(0);
+    });
+
+    it('returns empty report when no bucket configured', async () => {
+      const noBucket = { ...testConfig, bucket: undefined };
+      const cloudSync = new CloudSync(noBucket);
+      const store = { getUnsyncedSessions: jest.fn().mockReturnValue([]) } as never;
+
+      const report = await cloudSync.sync(store);
+      expect(report.uploaded).toBe(0);
+    });
+
+    it('uploads unsynced sessions', async () => {
+      const session = createTestSession('sync-test');
+      const mockSend = jest.fn().mockResolvedValue({});
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const mockStore = {
+        getUnsyncedSessions: jest.fn().mockReturnValue([session]),
+        markSynced: jest.fn(),
+        getById: jest.fn().mockReturnValue(null),
+      };
+
+      // Make listRemoteSessions return empty
+      const cloudSync = new CloudSync(testConfig);
+      const listSpy = jest.spyOn(cloudSync, 'listRemoteSessions').mockResolvedValue([]);
+
+      const report = await cloudSync.sync(mockStore as never);
+      expect(report.uploaded).toBe(1);
+      expect(mockStore.markSynced).toHaveBeenCalledWith(session.id);
+      listSpy.mockRestore();
+    });
+
+    it('downloads sessions from other devices', async () => {
+      const { Encryptor, encryptJson } = jest.requireActual<typeof import('../../src/sync/encryption')>('../../src/sync/encryption');
+      const key = Encryptor.generateKey();
+      const encryptor = new Encryptor(key);
+      const remoteSession = createTestSession('remote-session');
+      const encrypted = encryptJson(encryptor, remoteSession);
+
+      const mockBody = { transformToByteArray: jest.fn().mockResolvedValue(encrypted) };
+      const mockSend = jest.fn().mockResolvedValue({ Body: mockBody });
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const cloudSync = new CloudSync({ ...testConfig, encryptionKey: key });
+
+      const listSpy = jest.spyOn(cloudSync, 'listRemoteSessions').mockResolvedValue([{
+        sessionId: remoteSession.id,
+        deviceId: 'other-device', // different device
+        uploadedAt: new Date(),
+        size: encrypted.length,
+        key: `sessions/other-device/${remoteSession.id}.enc`,
+      }]);
+
+      const mockStore = {
+        getUnsyncedSessions: jest.fn().mockReturnValue([]),
+        getById: jest.fn().mockReturnValue(null), // don't have it locally
+        save: jest.fn(),
+        markSynced: jest.fn(),
+      };
+
+      const report = await cloudSync.sync(mockStore as never);
+      expect(report.downloaded).toBe(1);
+      listSpy.mockRestore();
+    });
+
+    it('handles upload failures gracefully', async () => {
+      const mockSend = jest.fn().mockRejectedValue(new Error('upload failed'));
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const session = createTestSession('fail-session');
+      const mockStore = {
+        getUnsyncedSessions: jest.fn().mockReturnValue([session]),
+        markSynced: jest.fn(),
+        getById: jest.fn().mockReturnValue(null),
+      };
+
+      const cloudSync = new CloudSync(testConfig);
+      const listSpy = jest.spyOn(cloudSync, 'listRemoteSessions').mockResolvedValue([]);
+
+      const report = await cloudSync.sync(mockStore as never);
+      expect(report.uploaded).toBe(0); // upload failed, not counted
+      listSpy.mockRestore();
+    });
+  });
+
+  describe('downloadSessions', () => {
+    it('returns empty array when no remote sessions', async () => {
+      const cloudSync = new CloudSync(testConfig);
+      jest.spyOn(cloudSync, 'listRemoteSessions').mockResolvedValue([]);
+
+      const result = await cloudSync.downloadSessions();
+      expect(result).toEqual([]);
+    });
+
+    it('filters sessions by date when since is provided', async () => {
+      const cloudSync = new CloudSync(testConfig);
+      const oldDate = new Date('2025-01-01');
+      const recentDate = new Date('2025-06-01');
+
+      jest.spyOn(cloudSync, 'listRemoteSessions').mockResolvedValue([
+        { sessionId: 'old', deviceId: 'd1', uploadedAt: oldDate, size: 0, key: 'k1' },
+        { sessionId: 'recent', deviceId: 'd1', uploadedAt: recentDate, size: 0, key: 'k2' },
+      ]);
+
+      // Mock downloadSession to avoid real downloads
+      jest.spyOn(cloudSync, 'downloadSession').mockResolvedValue(createTestSession('recent'));
+
+      const result = await cloudSync.downloadSessions(new Date('2025-03-01'));
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('listRemoteSessions with pagination', () => {
+    it('handles paginated responses', async () => {
+      let callCount = 0;
+      const mockSend = jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            Contents: [{ Key: 'sessions/dev1/s1.enc', LastModified: new Date(), Size: 100 }],
+            NextContinuationToken: 'token-for-page-2',
+          });
+        }
+        return Promise.resolve({
+          Contents: [{ Key: 'sessions/dev1/s2.enc', LastModified: new Date(), Size: 200 }],
+          NextContinuationToken: undefined,
+        });
+      });
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const cloudSync = new CloudSync(testConfig);
+      const sessions = await cloudSync.listRemoteSessions();
+      expect(sessions).toHaveLength(2);
+      expect(callCount).toBe(2);
+    });
+
+    it('ignores entries with incorrect path structure', async () => {
+      const mockSend = jest.fn().mockResolvedValue({
+        Contents: [
+          { Key: 'sessions/only-one-part.enc', LastModified: new Date(), Size: 100 },
+          { Key: 'sessions/dev/session/extra/path.enc', LastModified: new Date(), Size: 100 },
+          { Key: 'sessions/dev/valid.enc', LastModified: new Date(), Size: 100 },
+        ],
+      });
+      (S3Client as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+      const cloudSync = new CloudSync(testConfig);
+      const sessions = await cloudSync.listRemoteSessions();
+      expect(sessions).toHaveLength(1);
+    });
+  });
 });

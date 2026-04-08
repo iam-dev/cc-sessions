@@ -274,4 +274,124 @@ describe('Sessions HTTP API', () => {
       expect(status).toBe(404);
     });
   });
+
+  // ── Non-GET methods ────────────────────────────────────────────────────────
+
+  describe('Non-GET methods', () => {
+    test('returns 405 for POST requests', async () => {
+      const { status } = await new Promise<{ status: number }>((resolve, reject) => {
+        const req = http.request({ hostname: '127.0.0.1', port, method: 'POST', path: '/api/sessions' }, res => {
+          resolve({ status: res.statusCode ?? 0 });
+          res.resume();
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      expect(status).toBe(405);
+    });
+  });
+
+  // ── GET /api/projects/:path ────────────────────────────────────────────────
+
+  describe('GET /api/projects/:path', () => {
+    test('returns 404 for unknown project path', async () => {
+      const { status, body } = await get(port, `/api/projects/${encodeURIComponent('/nonexistent/proj')}`);
+      expect(status).toBe(404);
+      expect((body as { error: string }).error).toContain('Project not found');
+    });
+
+    test('returns project details including recentSessions for known project', async () => {
+      store.save(makeSession({ projectPath: '/my/proj', projectName: 'proj' }));
+      const { status, body } = await get(port, `/api/projects/${encodeURIComponent('/my/proj')}`);
+      expect(status).toBe(200);
+      const data = (body as { data: { projectPath: string; recentSessions: unknown[] } }).data;
+      expect(data.projectPath).toBe('/my/proj');
+      expect(Array.isArray(data.recentSessions)).toBe(true);
+    });
+  });
+
+  // ── GET /api/sessions/:id/messages ────────────────────────────────────────
+
+  describe('GET /api/sessions/:id/messages', () => {
+    test('returns 404 for unknown session', async () => {
+      const { status } = await get(port, '/api/sessions/no-such-session/messages');
+      expect(status).toBe(404);
+    });
+
+    test('returns 404 when log file does not exist on disk', async () => {
+      store.save(makeSession({ id: 'no-log-session', logFile: '/no/such/file.jsonl' }));
+      const { status } = await get(port, '/api/sessions/no-log-session/messages');
+      expect(status).toBe(404);
+    });
+
+    test('returns messages from a valid log file with string content', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-msgs-'));
+      const logFile = path.join(tmpDir, 'test.jsonl');
+      const lines = [
+        JSON.stringify({ type: 'human', content: 'Hello there', timestamp: '2024-01-01T10:00:00Z' }),
+        JSON.stringify({ type: 'assistant', content: 'Hi friend', timestamp: '2024-01-01T10:00:01Z' }),
+        JSON.stringify({ type: 'system', content: 'ignored' }),
+      ];
+      fs.writeFileSync(logFile, lines.join('\n'));
+
+      store.save(makeSession({ id: 'msgs-test', logFile }));
+
+      const { status, body } = await get(port, '/api/sessions/msgs-test/messages');
+      expect(status).toBe(200);
+      const { data } = body as { data: Array<{ role: string; text: string }> };
+      expect(data).toHaveLength(2);
+      expect(data[0]!.role).toBe('user');
+      expect(data[1]!.role).toBe('assistant');
+
+      fs.rmSync(tmpDir, { recursive: true });
+    });
+
+    test('parses message.content object format', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-msgs2-'));
+      const logFile = path.join(tmpDir, 'test.jsonl');
+      const entry = {
+        type: 'human',
+        message: { content: 'Hi from message.content' },
+        timestamp: '2024-01-01T10:00:00Z',
+      };
+      fs.writeFileSync(logFile, JSON.stringify(entry));
+
+      store.save(makeSession({ id: 'msgs-test2', logFile }));
+      const { status, body } = await get(port, '/api/sessions/msgs-test2/messages');
+      expect(status).toBe(200);
+      const { data } = body as { data: Array<{ role: string; text: string }> };
+      expect(data[0]!.text).toBe('Hi from message.content');
+
+      fs.rmSync(tmpDir, { recursive: true });
+    });
+
+    test('parses message.content array format', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-msgs3-'));
+      const logFile = path.join(tmpDir, 'test.jsonl');
+      const entry = {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'Hello from array' }, { type: 'tool_use' }] },
+        timestamp: '2024-01-01T10:00:00Z',
+      };
+      fs.writeFileSync(logFile, JSON.stringify(entry));
+
+      store.save(makeSession({ id: 'msgs-test3', logFile }));
+      const { status, body } = await get(port, '/api/sessions/msgs-test3/messages');
+      expect(status).toBe(200);
+      const { data } = body as { data: Array<{ role: string; text: string }> };
+      expect(data[0]!.text).toBe('Hello from array');
+
+      fs.rmSync(tmpDir, { recursive: true });
+    });
+  });
+
+  // ── GET /api/search invalid limit ─────────────────────────────────────────
+
+  describe('GET /api/search with invalid limit', () => {
+    test('returns 400 when limit is not a number', async () => {
+      const { status, body } = await get(port, '/api/search?q=test&limit=abc');
+      expect(status).toBe(400);
+      expect((body as { error: string }).error).toContain('limit');
+    });
+  });
 });
