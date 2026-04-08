@@ -6,7 +6,7 @@ nav_order: 3
 
 # Command Reference
 
-cc-sessions provides six slash commands for managing your session memories.
+cc-sessions provides slash commands and CLI commands for managing your session memories.
 
 ## /sessions
 
@@ -344,3 +344,135 @@ View and configure memory settings.
 | Forever | Never delete |
 
 See [Configuration](configuration.html) for full details on all settings.
+
+---
+
+## /sessions:ui
+
+Open the Sessions Browser UI in your default browser.
+
+```
+/sessions:ui
+```
+
+Starts a local web server at `http://127.0.0.1:3456` and opens the UI automatically.
+
+### What You Get
+
+- **Projects page** — grid of project cards with name, last summary, activity, and session count
+- **Project Summary view** — aggregate stats (sessions, tokens, duration, tasks done) plus README rendering and recent activity
+- **Session list view** — all sessions for a project with summary, duration, and token usage
+- **Session detail view** — full panel with tasks, files, key decisions, next steps, and blockers
+- **All Sessions view** — flat chronological list across every project
+- **Live search** — full-text search from the sidebar filters sessions in real time
+
+### Also Available as CLI
+
+```bash
+# Start UI (opens browser automatically)
+cc-sessions ui
+
+# Custom port, no auto-open
+cc-sessions ui --port 4000 --no-open
+```
+
+---
+
+## cc-sessions save
+
+Snapshot the current session immediately — run this before `/clear` to preserve your context.
+
+```bash
+cc-sessions save [claude-session-id]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `claude-session-id` | Optional. Session UUID to snapshot. Defaults to the most recently active session. |
+
+### Examples
+
+```bash
+# Save the current session (most recently active)
+cc-sessions save
+
+# Save a specific session by its Claude session ID
+cc-sessions save abc123-def456
+```
+
+### Output
+
+```
+✅ Session saved: abc123-def456 (pre-clear snapshot)
+```
+
+### When to use
+
+Run this command before typing `/clear` in Claude Code. The saved snapshot will appear in the sessions UI with a 📌 snapshot badge, and you can resume it later with `claude --resume <id>`.
+
+### Session tags
+
+Sessions saved with this command are tagged `snapshot` in the database. Sessions saved automatically via context compaction are tagged `pre-compact`.
+
+---
+
+## cc-sessions import
+
+Bulk-import Claude Code CLI sessions from `~/.claude/projects/` into the cc-sessions database.
+
+```bash
+cc-sessions import [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--project <path>` | Filter to sessions matching a project path substring |
+| `--dry-run` | Preview what would be imported without writing to the database |
+| `--no-ai` | Use fast rule-based summaries instead of AI-generated ones |
+| `--since <date>` | Only import sessions on or after an ISO 8601 date (e.g. `2026-01-01`) |
+| `--limit <n>` | Cap the number of sessions processed per run (default: **100**) |
+
+> **Note:** The default limit is 100 sessions. To import your entire history, pass a large number like `--limit 9999`.
+
+### Examples
+
+```bash
+# Import ALL sessions (override the default 100-session limit)
+cc-sessions import --limit 9999
+
+# Preview how many sessions would be imported without writing
+cc-sessions import --dry-run --limit 9999
+
+# Import only sessions for a specific project
+cc-sessions import --project ./myapp --limit 9999
+
+# Import recent sessions without AI summaries (faster)
+cc-sessions import --since 2026-01-01 --no-ai --limit 9999
+
+# Cap to 50 sessions (for testing)
+cc-sessions import --limit 50
+```
+
+### Deduplication
+
+Sessions already present in the database (identified by their Claude session ID) are automatically skipped. You can safely re-run `import` at any time.
+
+### Output
+
+```
+Scanning ~/.claude/projects/...
+Found 142 session files, 38 already imported.
+
+[  0%]   1/104  Importing session abc123...
+[ 25%]  26/104  Importing session def456...
+[ 50%]  52/104  Importing session ghi789...
+[100%] 104/104  Done.
+
+✅ Imported 104 sessions (38 skipped as duplicates)
+```
+
+Imported sessions are tagged with `"imported"` so you can filter or identify them later.
