@@ -31,10 +31,19 @@ describe('generateSummary', () => {
   });
 
   it('returns a valid SessionSummary with default skipAI (full chain, falls to rule-based in test env)', async () => {
-    // In test env: CC CLI not available, no ANTHROPIC_API_KEY → falls through to rule-based
+    // Control environment: clear PATH so claude binary is not found, clear API key
+    const origPath = process.env.PATH;
+    const origKey = process.env.ANTHROPIC_API_KEY;
+    process.env.PATH = '';
     delete process.env.ANTHROPIC_API_KEY;
-    const result = await generateSummary(makeSession(), testConfig);
-    expect(result.tags).toContain('no-ai-summary');
+
+    try {
+      const result = await generateSummary(makeSession(), testConfig);
+      expect(result.tags).toContain('no-ai-summary');
+    } finally {
+      process.env.PATH = origPath ?? '';
+      if (origKey !== undefined) process.env.ANTHROPIC_API_KEY = origKey;
+    }
   });
 
   it('skipAI=true result tags always include no-ai-summary', async () => {

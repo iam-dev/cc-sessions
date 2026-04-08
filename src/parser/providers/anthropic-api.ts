@@ -97,6 +97,7 @@ function parseResponse(text: string): SessionSummary | null {
     if (!match) return null;
 
     const data = JSON.parse(match[0]) as Record<string, unknown>;
+    if (!data['summary']) return null;
 
     return {
       summary:      String(data.summary ?? ''),
