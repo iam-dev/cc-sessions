@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { ruleBasedSummary } from '../../../src/parser/providers/rule-based';
 import type { ParsedSession } from '../../../src/types';
 
@@ -37,6 +36,7 @@ describe('ruleBasedSummary', () => {
   it('extracts technology tags from file extensions', () => {
     const result = ruleBasedSummary(makeSession({ filesModified: ['app.ts', 'styles.css'] }));
     expect(result.tags).toContain('no-ai-summary');
+    expect(result.tags).toContain('typescript');
   });
 
   it('always succeeds — returns valid SessionSummary shape', () => {

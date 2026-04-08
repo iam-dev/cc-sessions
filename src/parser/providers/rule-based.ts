@@ -22,7 +22,7 @@ export function ruleBasedSummary(parsed: ParsedSession): SessionSummary {
   const techTags    = extractTags(parsed.userMessages, parsed.assistantMessages, allFiles);
 
   const summary = buildSummary(projectName, firstUserMsg, fileCount, allFiles);
-  const description = buildDescription(projectName, firstUserMsg, parsed, allFiles);
+  const description = buildDescription(projectName, firstUserMsg, parsed);
 
   return {
     summary,
@@ -61,7 +61,6 @@ function buildDescription(
   projectName: string,
   firstUserMsg: string,
   parsed: ParsedSession,
-  files: string[],
 ): string {
   const parts: string[] = [];
 
