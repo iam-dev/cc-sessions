@@ -76,7 +76,7 @@ export function computeHealth(session: SessionMemory): SessionHealth {
   }
 
   // ---- Yellow conditions ----
-  const isYellowSomBlockers = blockers.length === 1 || blockers.length === 2;
+  const isYellowSomeBlockers = blockers.length === 1 || blockers.length === 2;
   const isYellowLowCompletion = tasksTotal > 0 && completionRate < 0.67;
   const isYellowWorkInProgress =
     nextSteps.length > 0 &&
@@ -84,10 +84,10 @@ export function computeHealth(session: SessionMemory): SessionHealth {
     tasksCompleted === 0 &&
     tasksTotal > 0;
 
-  if (isYellowSomBlockers || isYellowLowCompletion || isYellowWorkInProgress) {
+  if (isYellowSomeBlockers || isYellowLowCompletion || isYellowWorkInProgress) {
     const reasons: string[] = [];
 
-    if (isYellowSomBlockers) {
+    if (isYellowSomeBlockers) {
       reasons.push(`${blockers.length} blocker${blockers.length === 1 ? '' : 's'}`);
     } else if (isYellowWorkInProgress) {
       // "work in progress" is more descriptive than a raw completion percentage

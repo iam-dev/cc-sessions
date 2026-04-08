@@ -76,6 +76,15 @@ describe('computeHealth', () => {
       expect(result.reasons).toContain('3/4 tasks done');
     });
 
+    it('returns green at 67/100 completion (0.67 exactly meets threshold)', () => {
+      // 67/100 = 0.67 exactly, which is NOT < 0.67, so the yellow condition is false
+      const result = computeHealth(
+        makeSession({ tasksCompleted: 67, tasksPending: 33, blockers: [] })
+      );
+      expect(result.score).toBe('green');
+      expect(result.reasons).toContain('67/100 tasks done');
+    });
+
     it('returns green when 0 blockers and 0 tasks total (exploratory)', () => {
       const result = computeHealth(
         makeSession({ tasksCompleted: 0, tasksPending: 0, blockers: [], nextSteps: [] })
@@ -129,15 +138,6 @@ describe('computeHealth', () => {
       );
       expect(result.score).toBe('yellow');
       expect(result.reasons).toContain('67% tasks done');
-    });
-
-    it('returns green at 67/100 completion (0.67 exactly meets threshold)', () => {
-      // 67/100 = 0.67 exactly, which is NOT < 0.67, so the yellow condition is false
-      const result = computeHealth(
-        makeSession({ tasksCompleted: 67, tasksPending: 33, blockers: [] })
-      );
-      expect(result.score).toBe('green');
-      expect(result.reasons).toContain('67/100 tasks done');
     });
 
     it('uses blocker reason over completion rate reason when both apply', () => {
