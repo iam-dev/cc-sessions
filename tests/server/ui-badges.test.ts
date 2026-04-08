@@ -14,11 +14,11 @@ describe('UI tag badges', () => {
     expect(html).toContain('.tag-badge');
   });
 
-  it('references pre-compact badge text in JS', () => {
-    expect(html).toContain('pre-compact');
+  it('references pre-compact badge text with emoji in JS', () => {
+    expect(html).toContain('\uD83D\uDCF8 pre-compact');
   });
 
-  it('references snapshot badge text in JS', () => {
-    expect(html).toContain('snapshot');
+  it('references snapshot badge text with emoji in JS', () => {
+    expect(html).toContain('\uD83D\uDCCC snapshot');
   });
 });
