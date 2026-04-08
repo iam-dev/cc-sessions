@@ -6,78 +6,16 @@
  */
 
 import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
 import { loadConfig } from '../config/loader';
-import { parseLogFile, findAllLogFiles } from '../parser/jsonl';
+import { parseLogFile } from '../parser/jsonl';
 import { generateSummary } from '../parser/summarizer';
 import { SessionStore } from '../store/sessions';
 import type { SessionMemory, ParsedSession, SessionSummary } from '../types';
+import { generateId, findCurrentSessionLog } from './utils';
 
 interface HookContext {
   sessionId: string;
   cwd: string;
-}
-
-/**
- * Generate a unique session memory ID
- */
-function generateId(): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).slice(2, 8);
-  return `mem_${timestamp}_${random}`;
-}
-
-/**
- * Find the log file for the current session
- */
-function findCurrentSessionLog(sessionId: string, cwd: string): string | null {
-  const claudeProjectsDir = path.join(os.homedir(), '.claude', 'projects');
-
-  if (!fs.existsSync(claudeProjectsDir)) {
-    return null;
-  }
-
-  // Get all log files
-  const allLogs = findAllLogFiles();
-
-  if (allLogs.length === 0) {
-    return null;
-  }
-
-  // Sort by modification time (most recent first)
-  const sortedLogs = allLogs
-    .map(logPath => ({
-      path: logPath,
-      mtime: fs.statSync(logPath).mtime.getTime()
-    }))
-    .sort((a, b) => b.mtime - a.mtime);
-
-  // First, try to find by session ID in the filename
-  const bySessionId = sortedLogs.find(log =>
-    path.basename(log.path, '.jsonl').includes(sessionId)
-  );
-  if (bySessionId) {
-    return bySessionId.path;
-  }
-
-  // Next, try to find by project path
-  const encodedCwd = encodeURIComponent(cwd);
-  const byCwd = sortedLogs.find(log => log.path.includes(encodedCwd));
-  if (byCwd) {
-    return byCwd.path;
-  }
-
-  // Fall back to most recently modified log file
-  // Only if it was modified within the last 5 minutes (likely current session)
-  const mostRecent = sortedLogs[0];
-  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-
-  if (mostRecent && mostRecent.mtime > fiveMinutesAgo) {
-    return mostRecent.path;
-  }
-
-  return null;
 }
 
 /**
@@ -168,27 +106,29 @@ export default async function sessionEndHook(context: HookContext): Promise<void
 
     // Save to store
     const store = new SessionStore();
-    store.save(sessionMemory);
+    try {
+      store.save(sessionMemory);
 
-    console.log(`✅ cc-sessions: Session saved - ${sessionMemory.summary}`);
+      console.log(`✅ cc-sessions: Session saved - ${sessionMemory.summary}`);
 
-    // Trigger cloud sync if enabled
-    if (config.cloud.enabled && config.cloud.syncOnSave) {
-      try {
-        const { CloudSync } = await import('../sync/cloud');
-        const cloudSync = new CloudSync(config.cloud);
-        await cloudSync.uploadSession(sessionMemory);
-        store.markSynced(sessionMemory.id);
-        console.log('☁️  cc-sessions: Session synced to cloud');
-      } catch (error) {
-        // Don't fail the session end if cloud sync fails
-        if (process.env.CC_MEMORY_DEBUG) {
-          console.error('cc-sessions: Cloud sync failed:', error);
+      // Trigger cloud sync if enabled
+      if (config.cloud.enabled && config.cloud.syncOnSave) {
+        try {
+          const { CloudSync } = await import('../sync/cloud');
+          const cloudSync = new CloudSync(config.cloud);
+          await cloudSync.uploadSession(sessionMemory);
+          store.markSynced(sessionMemory.id);
+          console.log('☁️  cc-sessions: Session synced to cloud');
+        } catch (error) {
+          // Don't fail the session end if cloud sync fails
+          if (process.env.CC_MEMORY_DEBUG) {
+            console.error('cc-sessions: Cloud sync failed:', error);
+          }
         }
       }
+    } finally {
+      store.close();
     }
-
-    store.close();
 
   } catch (error) {
     // Log error but don't interrupt session end

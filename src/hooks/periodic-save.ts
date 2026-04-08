@@ -7,73 +7,15 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import { loadConfig } from '../config/loader';
-import { parseLogFile, findAllLogFiles } from '../parser/jsonl';
+import { parseLogFile } from '../parser/jsonl';
 import { SessionStore } from '../store/sessions';
 import type { SessionMemory, ParsedSession } from '../types';
+import { generateId, findCurrentSessionLog } from './utils';
 
 interface HookContext {
   sessionId: string;
   cwd: string;
-}
-
-// Track the current session's memory ID for updates
-let currentSessionMemoryId: string | null = null;
-
-/**
- * Generate a unique session memory ID
- */
-function generateId(): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).slice(2, 8);
-  return `mem_${timestamp}_${random}`;
-}
-
-/**
- * Find the log file for the current session
- */
-function findCurrentSessionLog(sessionId: string, cwd: string): string | null {
-  const claudeProjectsDir = path.join(os.homedir(), '.claude', 'projects');
-
-  if (!fs.existsSync(claudeProjectsDir)) {
-    return null;
-  }
-
-  const allLogs = findAllLogFiles();
-
-  if (allLogs.length === 0) {
-    return null;
-  }
-
-  // Sort by modification time
-  const sortedLogs = allLogs
-    .map(logPath => ({
-      path: logPath,
-      mtime: fs.statSync(logPath).mtime.getTime()
-    }))
-    .sort((a, b) => b.mtime - a.mtime);
-
-  // Try to find by session ID
-  const bySessionId = sortedLogs.find(log =>
-    path.basename(log.path, '.jsonl').includes(sessionId)
-  );
-  if (bySessionId) return bySessionId.path;
-
-  // Try to find by project path
-  const encodedCwd = encodeURIComponent(cwd);
-  const byCwd = sortedLogs.find(log => log.path.includes(encodedCwd));
-  if (byCwd) return byCwd.path;
-
-  // Use most recently modified if within last minute
-  const mostRecent = sortedLogs[0];
-  const oneMinuteAgo = Date.now() - 60 * 1000;
-
-  if (mostRecent && mostRecent.mtime > oneMinuteAgo) {
-    return mostRecent.path;
-  }
-
-  return null;
 }
 
 /**
@@ -156,40 +98,26 @@ export default async function periodicSaveHook(context: HookContext): Promise<vo
 
     // Create or update checkpoint
     const store = new SessionStore();
-
-    // Check if we have an existing checkpoint for this session
-    let existingMemory: SessionMemory | null = null;
-
-    if (currentSessionMemoryId) {
-      existingMemory = store.getById(currentSessionMemoryId);
-    }
-
-    // If no existing checkpoint, check by Claude session ID
-    if (!existingMemory) {
+    try {
+      // Check by Claude session ID for an existing checkpoint
       const recent = store.getRecent(5, context.cwd);
-      existingMemory = recent.find(s =>
+      const existingMemory = recent.find(s =>
         s.claudeSessionId === parsed.claudeSessionId ||
         s.tags.includes('in-progress')
       ) || null;
 
-      if (existingMemory) {
-        currentSessionMemoryId = existingMemory.id;
-      }
+      // Create checkpoint memory
+      const checkpoint = createCheckpointMemory(
+        parsed,
+        logPath,
+        existingMemory?.id
+      );
+
+      // Save checkpoint
+      store.save(checkpoint);
+    } finally {
+      store.close();
     }
-
-    // Create checkpoint memory
-    const checkpoint = createCheckpointMemory(
-      parsed,
-      logPath,
-      existingMemory?.id
-    );
-
-    // Update the session memory ID for future updates
-    currentSessionMemoryId = checkpoint.id;
-
-    // Save checkpoint
-    store.save(checkpoint);
-    store.close();
 
     // Log quietly (don't spam user)
     if (process.env.CC_MEMORY_DEBUG) {
@@ -202,13 +130,6 @@ export default async function periodicSaveHook(context: HookContext): Promise<vo
       console.error('cc-sessions: Periodic save failed:', error);
     }
   }
-}
-
-/**
- * Reset the current session tracking (for testing)
- */
-export function resetSessionTracking(): void {
-  currentSessionMemoryId = null;
 }
 
 // Allow running directly for testing

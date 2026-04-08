@@ -257,20 +257,24 @@ export class RetentionManager {
     for (const session of sessions) {
       if (currentSize <= maxBytes) break;
 
+      let freed = 0;
+
       // Delete archived log file if exists
       if (session.logFileArchived && fs.existsSync(session.logFileArchived)) {
         const fileSize = fs.statSync(session.logFileArchived).size;
         fs.unlinkSync(session.logFileArchived);
+        freed += fileSize;
         result.bytesFreed += fileSize;
       }
 
       // Delete session from database
       if (this.store.delete(session.id)) {
         result.deleted++;
-        result.bytesFreed += 5000; // Estimate DB space
+        freed += 5000; // Estimate DB space
+        result.bytesFreed += 5000;
       }
 
-      currentSize = this.calculateStorageUsed();
+      currentSize -= freed;
     }
 
     return result;

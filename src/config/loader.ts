@@ -20,8 +20,6 @@ export async function loadConfig(): Promise<Config> {
   ensureConfigDir();
 
   if (!fs.existsSync(CONFIG_FILE)) {
-    // Create default config file
-    await saveConfig(DEFAULT_CONFIG);
     return DEFAULT_CONFIG;
   }
 

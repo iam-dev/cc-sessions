@@ -25,5 +25,5 @@ export { DEFAULT_CONFIG, RETENTION_OPTIONS, SUMMARY_MODELS } from './config/defa
 export { CloudSync, Encryptor, encryptJson, decryptJson } from './sync';
 
 // Version info
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 export const NAME = 'cc-sessions';

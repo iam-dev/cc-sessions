@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-04-08
+
+### Fixed
+
+#### Code Quality & Correctness
+- **LIKE wildcard escaping** — `simplSearch` fallback now escapes `%` and `_` in user queries to return accurate results
+- **FTS index rebuild safety** — FTS5 content table column names now match the backing `sessions` table (fixes `rebuild` operations)
+- **`getStats()` uses instance `dbPath`** — storage stats now report the correct file size when using a non-default database path
+- **`loadConfig()` side-effect removed** — no longer writes a default config file on first call; callers that need persistence should call `saveConfig()` explicitly
+- **`trimToStorageLimit` performance** — size is now tracked incrementally during cleanup instead of re-walking the full directory after each deletion
+
+#### Cloud Sync
+- **AWS SDK stream type** — replaced `@ts-expect-error` workaround with proper `response.Body.transformToByteArray()` call
+- **Encryption key output** — key is now written to `stderr` instead of `stdout` to avoid capture in pipes and CI logs
+
+#### Hooks
+- **`SessionStore` resource leak** — both session-end and periodic-save hooks now close the store in a `try/finally` block, preventing DB connection leaks on error paths
+- **Redundant module-level state removed** — `currentSessionMemoryId` in periodic-save was always `null` (hooks run as new processes); replaced with direct DB lookup
+
+#### Tests
+- **Loader test isolation** — `loadConfig` test no longer writes to the real `~/.cc-sessions/` directory
+- **Cloud test safety** — device-id file is now saved and restored around each test instead of being permanently deleted
+
+#### Refactoring
+- **Shared hook utilities** — `generateId()` and `findCurrentSessionLog()` extracted to `src/hooks/utils.ts`, eliminating duplication between session-end and periodic-save hooks
+- **SQL-based file/tag search** — `SearchIndex.searchByFile()` and `searchByTag()` now use targeted SQL queries instead of loading all sessions into memory
+
+### Changed
+- Version bumped to `1.1.0` in `src/index.ts`, `src/cli.ts`, and `package.json` (was incorrectly left at `1.0.0` since the v1.1.0 release)
+
+---
+
 ## [1.2.0] - 2026-04-08
 
 ### Added

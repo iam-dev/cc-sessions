@@ -63,8 +63,8 @@ export class CloudSync {
       // Generate and save a new key
       const newKey = Encryptor.generateKey();
       this.encryptor = new Encryptor(newKey);
-      console.log('cc-sessions: Generated new encryption key. Save this in your config:');
-      console.log(`  encryptionKey: "${newKey}"`);
+      console.error('cc-sessions: Generated new encryption key. Save this in your config:');
+      console.error(`  encryptionKey: "${newKey}"`);
     }
 
     // Initialize S3 client
@@ -231,13 +231,8 @@ export class CloudSync {
       throw new Error(`Failed to download session ${info.sessionId}: empty response`);
     }
 
-    // Convert stream to buffer
-    const chunks: Uint8Array[] = [];
-    // @ts-expect-error - response.Body is a stream
-    for await (const chunk of response.Body) {
-      chunks.push(chunk);
-    }
-    const encrypted = Buffer.concat(chunks);
+    // Convert stream to buffer using SDK's built-in helper
+    const encrypted = Buffer.from(await response.Body.transformToByteArray());
 
     // Decrypt
     const session = decryptJson<SessionMemory>(this.encryptor, encrypted);
