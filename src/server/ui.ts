@@ -193,6 +193,27 @@ export function getUIHtml(): string {
       color: var(--accent); flex-shrink: 0;
     }
 
+    /* ── Resume block ─────────────────────────────────────────────── */
+    .resume-block {
+      background: #1a1a1a; border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px 16px; margin-bottom: 16px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .resume-cmd {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .resume-cmd-text {
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--text);
+    }
+    .resume-copy-btn {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 3px 10px; font-size: 11px;
+      color: var(--muted); cursor: pointer; flex-shrink: 0;
+      transition: color .12s, border-color .12s;
+    }
+    .resume-copy-btn:hover { color: var(--text); border-color: #555; }
+    .resume-hint { font-size: 11px; color: var(--dim); }
+
     /* ── Shared ───────────────────────────────────────────────────── */
     .loading { display: flex; align-items: center; justify-content: center; padding: 64px; gap: 10px; color: var(--dim); font-size: 13px; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -428,6 +449,35 @@ function appendChildren(parent, child) {
 }
 
 function txt(str) { return document.createTextNode(str || ''); }
+
+/* ─── clipboard helpers ──────────────────────────────────────────────────── */
+function copyToClipboard(text, btn) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      showCopied(btn);
+    }).catch(function() {
+      fallbackCopy(text, btn);
+    });
+  } else {
+    fallbackCopy(text, btn);
+  }
+}
+
+function fallbackCopy(text, btn) {
+  var inp = document.createElement('input');
+  inp.style.cssText = 'position:fixed;opacity:0';
+  inp.value = text;
+  document.body.appendChild(inp);
+  inp.select();
+  try { document.execCommand('copy'); showCopied(btn); } catch(e) {}
+  document.body.removeChild(inp);
+}
+
+function showCopied(btn) {
+  var orig = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(function() { btn.textContent = orig; }, 1500);
+}
 
 /* ─── utilities ──────────────────────────────────────────────────────────── */
 
@@ -811,6 +861,25 @@ function openDetail(sessionId, backView) {
         s.blockers.map(function(b) { return warningRow(b); }),
         'var(--red)'
       ));
+    }
+
+    // Resume in Claude Code
+    if (s.claudeSessionId) {
+      var resumeCmd = 'claude --resume ' + s.claudeSessionId;
+      var copyBtn = h('button', {
+        class: 'resume-copy-btn',
+        text: 'Copy',
+        click: function() { copyToClipboard(resumeCmd, copyBtn); }
+      });
+      var resumeBlock = h('div', { class: 'resume-block' },
+        h('div', { class: 'detail-section-title', text: 'RESUME IN CLAUDE CODE' }),
+        h('div', { class: 'resume-cmd' },
+          h('span', { class: 'resume-cmd-text', text: resumeCmd }),
+          copyBtn
+        ),
+        h('div', { class: 'resume-hint', text: 'Open this session exactly where it was saved' })
+      );
+      body.appendChild(resumeBlock);
     }
 
     // Footer
