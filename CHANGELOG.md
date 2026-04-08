@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-08
+
+### Added
+
+#### Session Health Score Layer
+
+- **`src/analysis/health.ts`** — new analysis module: `computeHealth(session)` returns a `SessionHealth` with `score: 'green' | 'yellow' | 'red'`, human-readable `reasons[]`, and `confidence: 'high' | 'medium' | 'low'`; `aggregateProjectHealth(sessions)` rolls up the last 5 sessions to a single project-level health status; `getHealthLabel(score)` returns "Healthy / Mixed / Struggling"
+- **`src/analysis/patterns.ts`** — new analysis module: `getRecurringBlockers(sessions)` groups near-duplicate blocker strings using token-based Jaccard similarity (threshold 0.4) and returns the top 3 by frequency; `normalizeBlocker(text)` strips noise prefixes and punctuation before comparison
+- **Health dot on session list rows** — every session card in the Sessions Browser UI now shows a coloured 8 px dot (🟢/🟡/🔴) after the timestamp with a tooltip showing the reason list
+- **Health badge on session detail** — the session detail view shows a full "Healthy / Mixed / Struggling" badge below the session title
+- **Project card health line** — each project card in the Projects grid now shows a health dot + label, and the top recurring blocker (if it appears ≥ 2 times) directly on the card
+- **Health data in `/api/projects` response** — `handleProjects()` now augments each project with `health: ProjectHealth` and `topBlocker: {text, count} | null` computed server-side from the 5 most recent sessions
+- **53 new tests** covering all scoring paths, confidence levels, completion-rate boundaries, blocker normalisation, Jaccard grouping, project aggregation, and UI presence of CSS/JS identifiers
+
+#### Scoring Design
+
+Health is blocker-first: blockers are a stronger signal than task completion (task extraction is regex-based and single-session only). Red requires 3+ blockers, or being blocked with no progress; yellow covers 1–2 blockers or low completion; green is the absence of both. Full rationale in `CONTRIBUTING.md`.
+
+---
+
 ## [1.5.1] - 2026-04-08
 
 ### Added

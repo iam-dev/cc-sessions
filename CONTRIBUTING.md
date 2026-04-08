@@ -30,8 +30,12 @@ npm test
 ```
 cc-sessions/
 ├── src/
+│   ├── analysis/        # Health scoring & pattern detection
+│   │   ├── health.ts    # computeHealth, aggregateProjectHealth
+│   │   └── patterns.ts  # normalizeBlocker, getRecurringBlockers
 │   ├── parser/          # JSONL parsing & extraction
 │   ├── store/           # SQLite database & search
+│   ├── server/          # Web UI server & HTML SPA
 │   ├── config/          # Configuration loading
 │   ├── types.ts         # TypeScript interfaces
 │   └── index.ts         # Public exports
@@ -40,6 +44,18 @@ cc-sessions/
 ├── tests/               # Jest test files
 └── templates/           # Default config templates
 ```
+
+### Health Scoring
+
+Session health is computed purely from existing session fields (no schema changes):
+
+- **🟢 Healthy** — no blockers, adequate task completion
+- **🟡 Mixed** — 1–2 blockers or low task completion rate
+- **🔴 Struggling** — 3+ blockers, blocked with no progress, or stalled sessions
+
+Project health aggregates the most recent 5 sessions. Recurring blockers are detected via token-based Jaccard similarity (`patterns.ts`).
+
+Add tests under `tests/analysis/` for any changes to scoring logic.
 
 ### Code Style
 

@@ -18,6 +18,7 @@ Pick up exactly where you left off - even months later.
 - **Full-Text Search** - Search across all your sessions by keywords, files, or tasks
 - **Smart Resume** - Resume any session with full context restoration
 - **Sessions Browser UI** - Visual web interface to browse projects, sessions, and session details
+- **Session Health Scores** - 🟢/🟡/🔴 health indicators on every session and project card; recurring blockers surfaced automatically
 - **Bulk Import** - Import all your existing Claude Code CLI sessions in one command
 - **Cloud Sync** - Sync sessions across devices with end-to-end encryption (Pro)
 

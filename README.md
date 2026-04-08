@@ -16,6 +16,7 @@ Pick up exactly where you left off - even months later.
 - **Pre-Clear Snapshots** - Save before `/clear` with `cc-sessions save` or `/sessions:clear`; auto-snapshot on `/clear` via the SessionStart hook; auto-snapshot on compaction via the Notification hook
 - **Resume in Claude Code** - Every session shows the exact `claude --resume <id>` command so you can reopen it at any point
 - **Message Thread Viewer** - Click the "💬 N messages" badge in any session detail view to expand the full conversation thread inline
+- **Session Health Scores** - Green/yellow/red health indicators on every session and project card, scored by blocker count and task completion; recurring blockers surfaced automatically at the project level
 - **Cloud Sync (Pro)** - Sync sessions across devices with end-to-end encryption
 
 ## Installation
