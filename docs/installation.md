@@ -64,6 +64,16 @@ cc-sessions search "authentication"
 
 # Export a session
 cc-sessions export <session-id> --format md
+
+# Open the visual web UI
+cc-sessions ui
+
+# Bulk-import ALL existing Claude Code sessions
+cc-sessions import --limit 9999
+
+# Import with options (preview first, then import)
+cc-sessions import --dry-run --limit 9999
+cc-sessions import --project ./myapp --since 2026-01-01 --limit 9999
 ```
 
 ## Verify Installation
