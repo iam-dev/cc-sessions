@@ -113,4 +113,49 @@ describe('handleNotification', () => {
     expect(store.getAll()).toHaveLength(0);
     expect(mockFindLog).not.toHaveBeenCalled();
   });
+
+  it('does nothing when autoSave.enabled is false', async () => {
+    const logFilePath = writeMinimalJsonl(tmpDir, 'test-session-id');
+    mockFindLog.mockReturnValue(logFilePath);
+
+    const disabledConfig: Config = {
+      ...testConfig,
+      autoSave: { ...testConfig.autoSave, enabled: false },
+    };
+
+    const payload = {
+      hook_event_name: 'Notification',
+      session_id: 'test-session-id',
+      cwd: tmpDir,
+      params: { message: 'Context was compacted.' },
+    };
+
+    await handleNotification(payload, store, disabledConfig);
+
+    expect(store.getAll()).toHaveLength(0);
+    expect(mockFindLog).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no session log is found', async () => {
+    mockFindLog.mockReturnValue(null);
+    const payload = {
+      hook_event_name: 'Notification',
+      session_id: 'x',
+      cwd: tmpDir,
+      params: { message: 'Context was compacted.' },
+    };
+    await handleNotification(payload, store, testConfig);
+    expect(store.getAll()).toHaveLength(0);
+    expect(mockFindLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing when params is entirely absent', async () => {
+    const payload = {
+      hook_event_name: 'Notification',
+      session_id: 'x',
+      cwd: tmpDir,
+    } as never;
+    await handleNotification(payload, store, testConfig);
+    expect(store.getAll()).toHaveLength(0);
+  });
 });

@@ -41,6 +41,10 @@ export async function handleNotification(
     return;
   }
 
+  if (!config.autoSave.enabled) {
+    return;
+  }
+
   const message = payload.params?.message ?? '';
   if (!/compact/i.test(message)) {
     dbg('Notification: not a compaction event, skipping');
