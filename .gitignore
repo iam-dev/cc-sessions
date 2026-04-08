@@ -25,4 +25,4 @@ specs/
 # environment variables
 .env
 
-docs/superpowers
+docs/superpowers.worktrees
