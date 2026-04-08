@@ -16,6 +16,7 @@ import { RETENTION_OPTIONS, SUMMARY_MODELS } from './config/defaults';
 import { createServer } from './server/index';
 import { importFromGlobalStore } from './importer/index';
 import notificationHook from './hooks/notification';
+import postClearHook from './hooks/post-clear';
 import { saveSnapshot } from './hooks/snapshot';
 import { findCurrentSessionLog } from './hooks/utils';
 import { parseLogFile } from './parser/jsonl';
@@ -856,6 +857,19 @@ program
     } finally {
       store.close();
     }
+  });
+
+/**
+ * on-clear command — internal hook entry point (cc-sessions on-clear)
+ * Reads a SessionStart JSON payload from stdin and saves the cleared session.
+ * Always exits 0. Not intended for direct user use.
+ * Register in hooks.json with matcher: "clear".
+ */
+program
+  .command('on-clear')
+  .description('Internal: handle a SessionStart hook event after /clear (reads JSON from stdin)')
+  .action(async () => {
+    await postClearHook();
   });
 
 program.parse();
