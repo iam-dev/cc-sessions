@@ -5,6 +5,7 @@
  */
 
 import { Command } from 'commander';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -17,6 +18,8 @@ import { importFromGlobalStore } from './importer/index';
 import notificationHook from './hooks/notification';
 import { saveSnapshot } from './hooks/snapshot';
 import { findCurrentSessionLog } from './hooks/utils';
+import { parseLogFile } from './parser/jsonl';
+import { generateSummary } from './parser/summarizer';
 import type { SessionMemory, Config } from './types';
 
 const program = new Command();
@@ -320,7 +323,6 @@ program
     }
 
     if (options.output) {
-      const fs = await import('fs');
       const outputPath = path.resolve(options.output);
       fs.writeFileSync(outputPath, content, 'utf-8');
       console.log('Session exported successfully!\n');
@@ -755,6 +757,102 @@ program
     } catch (err) {
       console.error(`❌ Save failed: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
+    } finally {
+      store.close();
+    }
+  });
+
+/**
+ * Summarize command — regenerate AI summaries for sessions tagged no-ai-summary
+ *
+ * Usage:
+ *   cc-sessions summarize                # sessions with no-ai-summary tag (default)
+ *   cc-sessions summarize <session-id>   # one specific session by id
+ *   cc-sessions summarize --all          # all sessions
+ *   cc-sessions summarize --no-ai        # rule-based only
+ *   cc-sessions summarize --limit <n>    # cap sessions processed (default: 50)
+ */
+program
+  .command('summarize [sessionId]')
+  .description('Regenerate summaries for sessions with rule-based (no-ai-summary) summaries')
+  .option('--all', 'Regenerate all sessions, not just no-ai-summary ones')
+  .option('--no-ai', 'Use rule-based summarizer only (no AI providers)')
+  .option('--limit <number>', 'Maximum number of sessions to process', '50')
+  .action(async (sessionId?: string, options?: { all?: boolean; noAi?: boolean; limit?: string }) => {
+    const config = await loadConfig();
+    const store  = new SessionStore();
+    const skipAI = options?.noAi ?? false;
+    const limit  = parseInt(options?.limit ?? '50', 10);
+
+    try {
+      // 1. Select sessions
+      let sessions: SessionMemory[];
+      if (sessionId) {
+        const s = store.getAll().find(sess => sess.id === sessionId);
+        if (!s) {
+          console.error(`⚠️  Session not found: ${sessionId}`);
+          process.exit(1);
+        }
+        sessions = [s];
+      } else if (options?.all) {
+        sessions = store.getAll().slice(0, limit);
+      } else {
+        sessions = store.findByTag('no-ai-summary', limit);
+      }
+
+      if (sessions.length === 0) {
+        console.log('No sessions to summarize.');
+        return;
+      }
+
+      console.log(`Scanning for sessions to summarize...`);
+      console.log(`Found ${sessions.length} session${sessions.length !== 1 ? 's' : ''}.\n`);
+
+      let updated = 0;
+      let skipped = 0;
+
+      for (let i = 0; i < sessions.length; i++) {
+        const s   = sessions[i];
+        const num = `[${String(i + 1).padStart(String(sessions.length).length, ' ')}/${sessions.length}]`;
+        const label = truncate(`${s.projectName}: ${s.summary}`, 55);
+
+        // Skip if log file missing
+        if (!s.logFile || !fs.existsSync(s.logFile)) {
+          console.log(`${num} ${label.padEnd(55)}  ⚠️  log file not found, skipping`);
+          skipped++;
+          continue;
+        }
+
+        try {
+          const parsed    = parseLogFile(s.logFile);
+          const newSummary = await generateSummary(parsed, config.summaries, skipAI);
+
+          // Determine which provider succeeded:
+          // no-ai-summary in tags → rule-based; absent → AI (CC CLI or API, order tried first)
+          const provider = newSummary.tags.includes('no-ai-summary') ? 'rule-based' : 'AI';
+
+          store.save({
+            ...s,
+            summary:        newSummary.summary,
+            description:    newSummary.description,
+            tasks:          newSummary.tasks,
+            tasksCompleted: newSummary.tasks.filter(t => t.status === 'completed').length,
+            tasksPending:   newSummary.tasks.filter(t => t.status !== 'completed').length,
+            nextSteps:      newSummary.nextSteps,
+            keyDecisions:   newSummary.keyDecisions,
+            blockers:       newSummary.blockers,
+            tags:           newSummary.tags,
+          });
+
+          console.log(`${num} ${label.padEnd(55)}  ✅ ${provider}`);
+          updated++;
+        } catch (err) {
+          console.log(`${num} ${label.padEnd(55)}  ❌ error: ${err instanceof Error ? err.message : String(err)}`);
+          skipped++;
+        }
+      }
+
+      console.log(`\nDone. ${updated} updated, ${skipped} skipped.`);
     } finally {
       store.close();
     }
