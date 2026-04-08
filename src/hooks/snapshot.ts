@@ -65,7 +65,7 @@ function buildMemory(
   logPath: string,
 ): SessionMemory {
   const completedTasks = summary.tasks.filter(t => t.status === 'completed');
-  const pendingTasks   = summary.tasks.filter(t => t.status === 'pending');
+  const pendingTasks   = summary.tasks.filter(t => t.status !== 'completed');
 
   return {
     id:                   generateId(),
