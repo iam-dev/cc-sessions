@@ -120,6 +120,8 @@ END;
 
 All methods are **synchronous** (consistent with `better-sqlite3` and `SessionStore`). Disk I/O uses synchronous Node `fs` APIs (`fs.readdirSync`, `fs.statSync`, `fs.readFileSync`, `fs.writeFileSync`). No external glob library — file listing uses `fs.readdirSync(dir).filter(f => f.endsWith('.md'))`.
 
+**Synchronous I/O is a correctness constraint, not merely a style choice.** Because Node.js is single-threaded and all I/O is synchronous, HTTP request handlers cannot interleave mid-execution. This guarantees that concurrent `PUT /api/memory/:id` calls are serialised and cannot race on file writes or DB upserts. Introducing any `await` or async I/O in the write path would remove this guarantee and require explicit locking.
+
 **Exported utilities:** `encodeProjectPath`, `encodeId`, `decodeId` — defined in Background.
 
 **Constructor:** accepts optional `dbPath` (default `~/.cc-sessions/index.db`). Shares the same database file as `SessionStore`. Calls `initialize()` on construction.
@@ -148,8 +150,8 @@ All methods are **synchronous** (consistent with `better-sqlite3` and `SessionSt
 
 **Lazy sync check (invoked by `GET /api/memory?project=` before returning results):**
 1. Collect expected on-disk files (same logic as `syncProject()` steps 2–4).
-2. For each file, compare `fs.statSync(f).mtimeMs` against the DB row's `last_indexed_at` (treat missing rows as `last_indexed_at = 0`).
-3. If **any** file has `mtime > last_indexed_at`, call `syncProject()` before returning entries.
+2. For each file, compare `fs.statSync(f).mtimeMs` against the stored `file_mtime` DB column for that row (not `last_indexed_at`). Treat missing rows as `file_mtime = 0`.
+3. If **any** file has `disk mtime > stored file_mtime` (or the row is missing), call `syncProject()` before returning entries.
 4. If all files are up-to-date (or no files exist), skip the sync and return current DB rows directly.
 This means `GET /api/memory?project=` may trigger a full `syncProject()` pass — acceptable given the small size of memory dirs and the local/single-user nature of the server.
 
@@ -175,8 +177,8 @@ This means `GET /api/memory?project=` may trigger a full `syncProject()` pass �
    `type` is a controlled enum value and requires no quoting.
 7. For claude-md: write `body` directly.
 8. `fs.writeFileSync(entry.filePath, content, 'utf8')`.
-9. **Directly upsert** the DB row with the new `body` and updated `file_mtime` (from `fs.statSync` after write) and `last_indexed_at = Date.now()`. Do not rely on `syncProject()` to propagate this — mtime granularity on some filesystems (1-second on HFS+) may prevent `syncProject()` from detecting the change.
-10. Call `syncProject(projectPath)` to clean up any other stale entries in the project (added/deleted files) — the upsert in step 9 means the current entry is already correct regardless of mtime.
+9. **Directly upsert** the DB row with the new `body` and updated `file_mtime = fs.statSync(entry.filePath).mtimeMs` (read after the write) and `last_indexed_at = Date.now()`.
+10. Call `syncProject(projectPath)` to clean up other stale entries (added/deleted files) in the project. Because step 9 stored the exact `file_mtime` from `fs.statSync` after the write, `syncProject()` step 7 will compare the on-disk mtime against the stored `file_mtime` and find them equal — so the just-written file is **not re-processed** by `syncProject()`. On HFS+ with 1-second mtime granularity, `statSync` may return a rounded mtime; because both step 9 and `syncProject()` read `file_mtime` from `statSync`, they will agree. `syncProject()` safely handles only the other files in the project.
 
 #### `search()` implementation
 
@@ -193,6 +195,8 @@ ORDER BY score
 LIMIT ?
 ```
 `snippet()` extracts a relevant excerpt (up to 32 tokens) with `<mark>…</mark>` around matches. `score = Math.abs(bm25(...))` — higher is more relevant (same convention as `SessionStore`). Falls back to `LIKE`-based search if FTS throws.
+
+**`projectName` population:** `MemoryStore.search()` accepts a `SessionStore` reference (or the `MemoryStore` constructor stores a reference to `SessionStore` passed in). After fetching FTS results, for each distinct `project_path` in the results, look up the most recent `project_name` from the sessions table: `SELECT project_name FROM sessions WHERE project_path = ? ORDER BY started_at DESC LIMIT 1`. If no session exists for that project path, fall back to `path.basename(projectPath)`.
 
 **Server startup sync:** at startup, call `syncProject()` for all distinct `project_path` values in the sessions DB. To avoid startup latency with many stale projects, cap to projects with a session in the last 90 days; older projects are synced lazily on first access.
 
@@ -218,6 +222,7 @@ export interface MemoryEntry {
 
 export interface MemorySearchResult {
   entry: MemoryEntry;
+  projectName: string;    // human-readable name, joined from sessions DB (project_name column)
   score: number;          // Math.abs(bm25(...)) — higher = more relevant
   bodyHighlight: string;  // FTS snippet with <mark>…</mark> around matched terms
 }
@@ -260,7 +265,15 @@ Responses: `200` updated `MemoryEntry` | `400` missing/invalid body or > 512 KB 
 
 Request body: none expected; ignore any body.
 
-**Path safety:** `projectPath` is taken from `sessionStore.getProjects()` (validated above), which stores paths that were originally supplied by the cc-sessions importer from `~/.claude/projects/`. The write target is `path.resolve(projectPath, 'CLAUDE.md')`. Before writing, verify `resolvedTarget.startsWith(path.resolve(projectPath) + path.sep)` to guard against a crafted `projectPath` that itself ends in `..` (belt-and-suspenders; `getProjects()` validation is the primary guard).
+**Path safety:** `projectPath` comes from the `project` query parameter, which is validated against `sessionStore.getProjects()`. Session paths are stored as raw strings and may not be pre-normalised. Before writing, apply `path.resolve()` to both the target and the stored path:
+```typescript
+const normalizedProject = path.resolve(projectPath);
+const target = path.resolve(projectPath, 'CLAUDE.md');
+if (!target.startsWith(normalizedProject + path.sep)) {
+  throw new Error('403: path traversal detected');
+}
+```
+This catches any `..` components in a stored `projectPath` and prevents writes outside the project root.
 
 Behaviour:
 - If `<project_path>/CLAUDE.md` already exists on disk (regardless of DB state): call `syncProject()` to ensure DB is current, then return `409` with the existing `MemoryEntry`
