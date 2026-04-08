@@ -205,6 +205,18 @@ export class SessionStore {
   }
 
   /**
+   * Get a session by its Claude session ID (from the JSONL filename).
+   * Used for deduplication during import.
+   */
+  getByClaudeSessionId(claudeSessionId: string): SessionMemory | null {
+    const stmt = this.db.prepare(
+      'SELECT * FROM sessions WHERE claude_session_id = ? LIMIT 1'
+    );
+    const row = stmt.get(claudeSessionId) as Record<string, unknown> | undefined;
+    return row ? this.rowToSession(row) : null;
+  }
+
+  /**
    * Get the last session for a project
    */
   getLastForProject(projectPath: string): SessionMemory | null {

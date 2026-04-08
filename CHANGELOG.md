@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-04-08
+
+### Added
+
+#### Import Command
+- **`cc-sessions import`** — new CLI command to bulk-import Claude Code CLI sessions from `~/.claude/projects/` into the cc-sessions database
+- **Deduplication** — sessions already in the database are automatically skipped (identified by `claudeSessionId`)
+- **`--project <path>`** — filter import to sessions matching a specific project path substring
+- **`--dry-run`** — preview which sessions would be imported without writing to the database
+- **`--no-ai`** — skip AI summary generation and use fast rule-based summaries instead
+- **`--since <date>`** — only import sessions that started on or after an ISO 8601 date
+- **`--limit <n>`** — cap the number of sessions processed per run (default: 100)
+- **Progress reporting** — live `[%] current/total` progress indicator during import
+- **Imported tag** — all imported sessions are tagged with `"imported"` for easy filtering
+
+#### Store
+- **`SessionStore.getByClaudeSessionId(id)`** — new method to look up a session by its Claude session ID; used internally for import deduplication
+
+### Technical Details
+- New module: `src/importer/index.ts` with `importFromGlobalStore()` and `importSingleFile()` exports
+- 18 new unit tests in `tests/importer/import.test.ts`
+- 10 new E2E tests in `tests/e2e/cli-import.test.ts` (full CLI subprocess testing)
+- Total test count: 135
+
+---
+
 ## [1.3.0] - 2026-04-08
 
 ### Added
