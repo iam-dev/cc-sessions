@@ -82,6 +82,7 @@ describe('saveSnapshot', () => {
     const all = store.getAll();
     expect(all).toHaveLength(1);           // still just one record
     expect(all[0].tags).toContain('pre-compact');
+    expect(all[0].tags).toContain('snapshot');   // ← first tag must survive second save
   });
 
   it('preserves claudeSessionId on the saved record', async () => {

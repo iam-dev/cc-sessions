@@ -36,14 +36,16 @@ export async function saveSnapshot(
   const summary = await resolveSummary(parsed, config);
   const sessionMemory = buildMemory(parsed, summary, logPath);
 
-  // Append tag — preserve any AI-generated tags from summary
-  sessionMemory.tags = [...sessionMemory.tags, tag];
-
   // Upsert: if a record already exists for this Claude session, reuse its id
   // so store.save() (INSERT OR REPLACE on primary key) updates it in place
   const existing = store.getByClaudeSessionId(parsed.claudeSessionId);
   if (existing) {
     sessionMemory.id = existing.id;
+    // Preserve tags already persisted; append new tag only if not already present
+    const merged = Array.from(new Set([...existing.tags, ...sessionMemory.tags, tag]));
+    sessionMemory.tags = merged;
+  } else {
+    sessionMemory.tags = [...sessionMemory.tags, tag];
   }
 
   store.save(sessionMemory);
@@ -96,7 +98,7 @@ function buildMemory(
   logPath: string,
 ): SessionMemory {
   const completedTasks = summary.tasks.filter(t => t.status === 'completed');
-  const pendingTasks   = summary.tasks.filter(t => t.status !== 'completed');
+  const pendingTasks   = summary.tasks.filter(t => t.status === 'pending');
 
   return {
     id:                   generateId(),
