@@ -26,3 +26,5 @@ specs/
 .env
 
 docs/superpowers.worktrees
+docs/superpowers
+coverage
