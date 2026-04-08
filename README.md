@@ -13,7 +13,7 @@ Pick up exactly where you left off - even months later.
 - **Smart Resume** - Resume any session with full context restoration
 - **Cross-Project Memory** - Access memories from any project
 - **Periodic Auto-Save** - Checkpoint saves every 5 minutes protect against data loss
-- **Pre-Clear Snapshots** - Save a snapshot before `/clear` with `cc-sessions save`; auto-snapshot on compaction via the Notification hook
+- **Pre-Clear Snapshots** - Save before `/clear` with `cc-sessions save` or `/sessions:clear`; auto-snapshot on `/clear` via the SessionStart hook; auto-snapshot on compaction via the Notification hook
 - **Resume in Claude Code** - Every session shows the exact `claude --resume <id>` command so you can reopen it at any point
 - **Cloud Sync (Pro)** - Sync sessions across devices with end-to-end encryption
 
@@ -133,6 +133,24 @@ Save the current session immediately — use this before running `/clear` to pre
 
 Runs `cc-sessions save` and shows the result. Requires the skill file at `~/.claude/skills/sessions-snapshot.md` (installed automatically when you run `cc-sessions save` for the first time, or manually via the hook setup below).
 
+### `/sessions:clear`
+Save the current session with a full AI summary, then clear context.
+
+```
+/sessions:clear
+```
+
+Runs `cc-sessions save`, reports the saved session ID, then runs `/clear`. If the save fails, warns the user before clearing. Use this instead of `/clear` when you want to preserve your session.
+
+### `/sessions:import`
+Import all Claude Code CLI sessions from `~/.claude/projects/` with AI-generated summaries.
+
+```
+/sessions:import
+```
+
+Runs `cc-sessions import --limit 9999`, shows the output, then displays the 5 most recent sessions for verification. If many show `no-ai-summary` tags, suggests running `cc-sessions summarize`.
+
 ## Snapshots & Resume
 
 ### Save before `/clear`
@@ -156,6 +174,26 @@ claude --resume abc123-def456
 
 The `claude --resume` command is also shown with a copy button in the session detail view of the Sessions Browser UI.
 
+### Auto-save on `/clear`
+
+Register the SessionStart hook to automatically save the cleared session whenever you type `/clear`:
+
+```json
+// ~/.claude/settings.json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "clear",
+        "hooks": [{ "type": "command", "command": "cc-sessions on-clear" }]
+      }
+    ]
+  }
+}
+```
+
+Sessions saved this way are tagged `pre-clear` (🗑️ badge in the UI). This is set up automatically when using the plugin.
+
 ### Auto-snapshot on compaction
 
 Register the Notification hook to automatically save a snapshot whenever Claude Code compacts context:
@@ -172,6 +210,21 @@ Register the Notification hook to automatically save a snapshot whenever Claude 
 ```
 
 Auto-snapshotted sessions are tagged `pre-compact` (📸 badge in the UI). The hook always exits 0 and never interrupts your session. Enable debug output with `CC_MEMORY_DEBUG=1`.
+
+---
+
+## Retroactive Summary Upgrade
+
+After importing, sessions without AI access at import time are tagged `no-ai-summary`. Upgrade them once AI is available:
+
+```bash
+cc-sessions summarize              # upgrade all no-ai-summary sessions (default)
+cc-sessions summarize --all        # force-regenerate every session
+cc-sessions summarize --no-ai      # rule-based only (no AI)
+cc-sessions summarize --limit 20   # cap sessions processed
+```
+
+The provider chain tries in order: **CC CLI** (`claude` binary) → **Anthropic API** (`ANTHROPIC_API_KEY`) → **rule-based fallback**.
 
 ---
 
@@ -266,7 +319,7 @@ cc-sessions/
 1. **SessionStart Hook** — When you start Claude Code, cc-sessions shows your last session summary
 2. **Periodic Save Hook** — Every 5 minutes, a checkpoint is saved to protect against data loss
 3. **Notification Hook** — When Claude Code compacts context, a pre-compact snapshot is auto-saved (requires hook registration)
-4. **Manual Snapshot** — Run `cc-sessions save` (or `/sessions:snapshot`) before `/clear` to preserve context
+4. **Manual Snapshot** — Run `cc-sessions save` (or `/sessions:clear`) before `/clear` to preserve context; the SessionStart hook also auto-saves when `/clear` fires
 5. **SessionEnd Hook** — When you end the session, a full summary is generated and saved
 6. **Resume** — Use `claude --resume <id>` (shown in the UI) to reopen any saved session
 

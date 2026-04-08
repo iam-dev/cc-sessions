@@ -231,53 +231,7 @@ async function resolveSummary(
   config: Config,
   skipAI: boolean
 ): Promise<SessionSummary> {
-  if (!skipAI && config.autoSave.generateSummary) {
-    try {
-      return await generateSummary(parsed, config.summaries);
-    } catch {
-      // Fall through to rule-based summary
-    }
-  }
-
-  return createFallbackSummary(parsed);
-}
-
-/**
- * Rule-based summary when AI is disabled or unavailable.
- */
-function createFallbackSummary(parsed: ParsedSession): SessionSummary {
-  const projectName = path.basename(parsed.projectPath);
-  const fileCount = parsed.filesCreated.length + parsed.filesModified.length;
-
-  const summary =
-    fileCount > 0
-      ? `Session in ${projectName}: modified ${fileCount} file${fileCount !== 1 ? 's' : ''}`
-      : `Session in ${projectName}: ${parsed.messagesCount} message${parsed.messagesCount !== 1 ? 's' : ''}`;
-
-  const description = [
-    `Worked on ${projectName} for ${parsed.duration} minute${parsed.duration !== 1 ? 's' : ''}.`,
-    parsed.filesCreated.length > 0
-      ? `Created ${parsed.filesCreated.length} new file${parsed.filesCreated.length !== 1 ? 's' : ''}.`
-      : null,
-    parsed.filesModified.length > 0
-      ? `Modified ${parsed.filesModified.length} existing file${parsed.filesModified.length !== 1 ? 's' : ''}.`
-      : null,
-    parsed.tokensUsed > 0
-      ? `Used ${Math.round(parsed.tokensUsed / 1000)}K tokens.`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  return {
-    summary,
-    description,
-    tasks: [],
-    nextSteps: [],
-    keyDecisions: [],
-    blockers: [],
-    tags: [],
-  };
+  return generateSummary(parsed, config.summaries, skipAI);
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "@iam-dev/cc-sessions",
-  "version": "1.3.1",
+  "version": "1.5.0",
   "description": "Never lose context again. Smart session memory with extended retention for Claude Code.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

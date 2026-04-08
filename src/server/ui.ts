@@ -635,7 +635,7 @@ function buildSessionCard(s, backView) {
   }
 
   // Tag badges (pre-compact, snapshot)
-  var KNOWN_TAGS = { 'pre-compact': '\uD83D\uDCF8 pre-compact', 'snapshot': '\uD83D\uDCCC snapshot' };
+  var KNOWN_TAGS = { 'pre-compact': '\uD83D\uDCF8 pre-compact', 'snapshot': '\uD83D\uDCCC snapshot', 'pre-clear': '\uD83D\uDDD1\uFE0F pre-clear' };
   var tagKeys = Object.keys(KNOWN_TAGS);
   if (s.tags && s.tags.length > 0) {
     for (var ti = 0; ti < tagKeys.length; ti++) {

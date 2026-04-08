@@ -69,3 +69,46 @@ export function findCurrentSessionLog(
 
   return null;
 }
+
+/**
+ * Find the most recently modified JSONL file in projectDir that:
+ * - is NOT the new session's transcript_path (path.resolve comparison)
+ * - is NOT empty (size > 0)
+ * - has mtime within the last maxAgeMinutes minutes
+ *
+ * Returns null if no matching file is found.
+ */
+export function findPreviousSessionLog(
+  projectDir: string,
+  excludePath: string,
+  maxAgeMinutes = 60,
+): string | null {
+  if (!fs.existsSync(projectDir)) return null;
+
+  const normalizedExclude = path.resolve(excludePath);
+  const cutoff = Date.now() - maxAgeMinutes * 60 * 1000;
+
+  const candidates: Array<{ p: string; mtime: number }> = [];
+
+  try {
+    const entries = fs.readdirSync(projectDir);
+    for (const entry of entries) {
+      if (!entry.endsWith('.jsonl')) continue;
+      const fullPath = path.resolve(path.join(projectDir, entry));
+      if (fullPath === normalizedExclude) continue;
+
+      const stat = fs.statSync(fullPath);
+      if (stat.size === 0) continue;
+      if (stat.mtime.getTime() < cutoff) continue;
+
+      candidates.push({ p: fullPath, mtime: stat.mtime.getTime() });
+    }
+  } catch {
+    return null;
+  }
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => b.mtime - a.mtime);
+  return candidates[0].p;
+}

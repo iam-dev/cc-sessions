@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-04-08
+
+### Added
+
+#### Rich Session Summaries — 3-Tier AI Provider Chain
+- **CC CLI provider** — tries `claude -p "<prompt>" --output-format json` first; no API key required, uses the local Claude Code binary; unwraps the `{ result: "<JSON>" }` envelope
+- **Anthropic API provider** — falls back to the Anthropic SDK if `ANTHROPIC_API_KEY` is set; supports `haiku` and `sonnet` models via config
+- **Rule-based provider** — final fallback; always succeeds; extracts intent from the first user message, file extensions for tech tags; tags result with `no-ai-summary` for later upgrade
+- **`cc-sessions summarize`** — new CLI command to retroactively regenerate AI summaries for sessions tagged `no-ai-summary`; supports `[session-id]`, `--all`, `--no-ai`, and `--limit <n>` flags; shows per-session provider label (`CC CLI` / `API` / `rule-based`)
+
+#### Auto-Save on `/clear`
+- **`cc-sessions on-clear`** — internal CLI entry point reading a `SessionStart` JSON payload from stdin and saving the cleared session tagged `pre-clear` with a full AI summary (`forceAI=true`)
+- **SessionStart hook with `matcher: "clear"`** — registered in `hooks/hooks.json`; fires after the user types `/clear` and auto-saves the cleared session
+- **`/sessions:clear` slash command skill** — saves the current session via `cc-sessions save` before running `/clear`; warns if save fails
+
+#### Import Workflow
+- **`/sessions:import` slash command skill** — runs `cc-sessions import --limit 9999`, shows output, then displays the 5 most recent sessions for verification; suggests `cc-sessions summarize` if many have `no-ai-summary` tags
+
+#### UI
+- **`pre-clear` tag badge** — sessions saved before a `/clear` now show a 🗑️ `pre-clear` badge in the Sessions Browser UI
+
+#### CI
+- **GitHub Actions CI workflow** (`.github/workflows/ci.yml`) — runs `build` + `test` on Node 18/20/22 matrix and `lint` on Node 20; triggers on all PR events
+
+### Fixed
+- **`tasksPending` inconsistency** — `snapshot.ts` now counts `in_progress` and `blocked` tasks as pending (uses `!== 'completed'`), consistent with the importer and UI
+- **Anthropic provider empty-summary bypass** — `parseResponse()` now returns `null` when the API response has no `summary` field, ensuring rule-based fallback fires correctly
+
+### Technical Details
+- New modules: `src/parser/providers/rule-based.ts`, `src/parser/providers/anthropic-api.ts`, `src/parser/providers/claude-cli.ts`, `src/hooks/post-clear.ts`
+- `src/parser/summarizer.ts` rewritten as a 44-line thin orchestrator delegating to the three providers
+- `saveSnapshot()` gains `forceAI = false` parameter; `src/importer/index.ts` drops duplicate `createFallbackSummary()`
+- `findPreviousSessionLog(projectDir, excludePath, maxAgeMinutes=60)` added to `src/hooks/utils.ts`
+- 28 new tests across 7 new test files; total: 181 passing, 1 skipped
+
+---
+
 ## [1.4.0] - 2026-04-08
 
 ### Added
