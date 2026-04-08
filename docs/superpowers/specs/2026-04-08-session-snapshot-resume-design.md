@@ -108,7 +108,7 @@ Added to `src/cli.ts`.
 
 | Scenario | Behaviour |
 |----------|-----------|
-| No args | `findCurrentSessionLog('', process.cwd())` — with empty string, the session-ID match in `findCurrentSessionLog` matches every log (empty string is a substring of everything), so the function immediately returns the most recently modified JSONL file. This is the intended fallback behaviour: grab the active session. |
+| No args | `findCurrentSessionLog('', process.cwd())`. In `utils.ts`, `''.includes('')` is always `true`, so the session-ID branch matches the very first (most recently modified) log immediately and returns it unconditionally — the 5-minute recency threshold is never reached. **This is the correct behaviour for `cc-sessions save`**: the user explicitly invoked the command, so the most recently touched JSONL is what they want regardless of age. The spec accepts this shortcut. |
 | `claude-session-id` arg | `findCurrentSessionLog(claudeSessionId, process.cwd())` — matches by UUID in filename |
 
 - Calls `saveSnapshot(logPath, store, config, 'snapshot')` then `store.close()`
