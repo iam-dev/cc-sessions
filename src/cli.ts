@@ -14,6 +14,9 @@ import { loadConfig, getConfigFile } from './config/loader';
 import { RETENTION_OPTIONS, SUMMARY_MODELS } from './config/defaults';
 import { createServer } from './server/index';
 import { importFromGlobalStore } from './importer/index';
+import notificationHook from './hooks/notification';
+import { saveSnapshot } from './hooks/snapshot';
+import { findCurrentSessionLog } from './hooks/utils';
 import type { SessionMemory, Config } from './types';
 
 const program = new Command();
@@ -707,6 +710,54 @@ program
     }
 
     store.close();
+  });
+
+/**
+ * Notify command — internal hook entry point (cc-sessions notify)
+ * Reads a Notification JSON payload from stdin and snapshots the session
+ * if compaction is detected. Always exits 0. Not intended for direct user use.
+ */
+program
+  .command('notify')
+  .description('Internal: handle a Claude Code Notification hook event (reads JSON from stdin)')
+  .action(async () => {
+    await notificationHook();
+  });
+
+/**
+ * Save command — snapshot the current session before /clear
+ *
+ * Usage:
+ *   cc-sessions save                    # most recently modified JSONL
+ *   cc-sessions save <claude-session-id> # specific session by ID
+ */
+program
+  .command('save [claudeSessionId]')
+  .description('Snapshot the current session (run before /clear to preserve context)')
+  .action(async (claudeSessionId?: string) => {
+    const config = await loadConfig();
+    const store  = new SessionStore();
+
+    try {
+      const logPath = findCurrentSessionLog(claudeSessionId ?? '', process.cwd());
+
+      if (!logPath) {
+        console.error('No session log found — run this command from your project directory');
+        process.exit(1);
+      }
+
+      await saveSnapshot(logPath, store, config, 'snapshot');
+
+      // Read back the saved session to display its claudeSessionId
+      const sessions = store.getRecent(1);
+      const savedId  = sessions[0]?.claudeSessionId ?? logPath;
+      console.log(`Session saved: ${savedId} (pre-clear snapshot)`);
+    } catch (err) {
+      console.error('Save failed:', err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    } finally {
+      store.close();
+    }
   });
 
 program.parse();
