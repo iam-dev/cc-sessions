@@ -7,10 +7,13 @@
 import { Command } from 'commander';
 import * as path from 'path';
 import * as http from 'http';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { version } = require('../package.json') as { version: string };
 import { SessionStore } from './store/sessions';
 import { loadConfig, getConfigFile } from './config/loader';
 import { RETENTION_OPTIONS, SUMMARY_MODELS } from './config/defaults';
 import { createServer } from './server/index';
+import { importFromGlobalStore } from './importer/index';
 import type { SessionMemory, Config } from './types';
 
 const program = new Command();
@@ -18,7 +21,7 @@ const program = new Command();
 program
   .name('cc-sessions')
   .description('Smart session memory for Claude Code')
-  .version('1.1.0');
+  .version(version);
 
 /**
  * Format duration in human readable format
@@ -592,6 +595,118 @@ program
         process.exit(0);
       });
     });
+  });
+
+/**
+ * Import command - import Claude Code CLI sessions from the global store
+ */
+program
+  .command('import')
+  .description('Import Claude Code CLI sessions from ~/.claude/projects/ into the database')
+  .option('-p, --project <path>', 'Only import sessions for a specific project path')
+  .option('--dry-run', 'Preview sessions that would be imported without saving them')
+  .option('--no-ai', 'Skip AI summary generation; use rule-based summaries instead')
+  .option('--since <date>', 'Only import sessions that started on or after this date (ISO 8601 or YYYY-MM-DD)')
+  .option('-l, --limit <number>', 'Maximum number of sessions to import', '100')
+  .action(async (options: {
+    project?: string;
+    dryRun?: boolean;
+    ai: boolean;
+    since?: string;
+    limit: string;
+  }) => {
+    const config = await loadConfig();
+    const store = new SessionStore();
+
+    const limit = parseInt(options.limit, 10);
+    if (isNaN(limit) || limit < 1) {
+      console.error('Invalid limit: must be a positive integer.');
+      process.exit(1);
+    }
+
+    let since: Date | undefined;
+    if (options.since) {
+      since = new Date(options.since);
+      if (isNaN(since.getTime())) {
+        console.error(`Invalid date: "${options.since}". Use ISO 8601 format, e.g. 2024-01-15`);
+        process.exit(1);
+      }
+    }
+
+    const skipAI = !options.ai;
+
+    if (options.dryRun) {
+      console.log('DRY RUN — no sessions will be saved.\n');
+    }
+
+    console.log('Scanning ~/.claude/projects/ for sessions...\n');
+
+    let lastPercent = -1;
+
+    const result = await importFromGlobalStore(store, config, {
+      projectPath: options.project,
+      dryRun: options.dryRun,
+      since,
+      limit,
+      skipAI,
+      onProgress: (current, total, logPath) => {
+        const percent = Math.floor((current / total) * 100);
+        if (percent !== lastPercent) {
+          lastPercent = percent;
+          process.stdout.write(
+            `\r  [${percent.toString().padStart(3)}%] ${current}/${total} — ${path.basename(logPath)}`
+          );
+        }
+      },
+    });
+
+    // Clear progress line
+    process.stdout.write('\r' + ' '.repeat(80) + '\r');
+
+    if (options.dryRun) {
+      console.log(`Found ${result.sessions.length + result.skipped + result.failed} session(s):`);
+      console.log(`  ${result.sessions.length} would be imported`);
+      console.log(`  ${result.skipped} already in database (would be skipped)`);
+      if (result.failed > 0) {
+        console.log(`  ${result.failed} would fail`);
+      }
+
+      if (result.sessions.length > 0) {
+        console.log('\nSessions that would be imported:');
+        for (const s of result.sessions.slice(0, 10)) {
+          const when = formatRelativeTime(s.startedAt);
+          console.log(`  - ${s.projectName}: ${s.summary} (${when})`);
+        }
+        if (result.sessions.length > 10) {
+          console.log(`  ... and ${result.sessions.length - 10} more`);
+        }
+      }
+    } else {
+      const total = result.imported + result.skipped + result.failed;
+      console.log(`Processed ${total} session(s):`);
+      console.log(`  ${result.imported} imported`);
+      console.log(`  ${result.skipped} already in database (skipped)`);
+      if (result.failed > 0) {
+        console.log(`  ${result.failed} failed`);
+        for (const err of result.errors.slice(0, 5)) {
+          console.log(`    - ${err}`);
+        }
+      }
+
+      if (result.imported > 0) {
+        console.log('\nRecently imported:');
+        for (const s of result.sessions.slice(0, 5)) {
+          console.log(`  - ${s.projectName}: ${s.summary}`);
+        }
+      }
+
+      if (result.imported === 0 && result.skipped === 0) {
+        console.log('\nNo Claude Code sessions found in ~/.claude/projects/');
+        console.log('Sessions are created when you use Claude Code in a project.');
+      }
+    }
+
+    store.close();
   });
 
 program.parse();
