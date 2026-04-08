@@ -14,6 +14,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SessionStore } from '../store/sessions';
 import { getUIHtml } from './ui';
+import { aggregateProjectHealth } from '../analysis/health';
+import { getRecurringBlockers } from '../analysis/patterns';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -126,7 +128,14 @@ function handleProjects(
   store: SessionStore,
 ): void {
   const projects = store.getProjects();
-  sendJson(res, 200, { data: projects });
+  const augmented = projects.map(p => {
+    const recentSessions = store.getRecent(5, p.projectPath);
+    const health = aggregateProjectHealth(recentSessions);
+    const blockers = getRecurringBlockers(recentSessions);
+    const topBlocker = blockers.find(b => b.count >= 2) ?? null;
+    return { ...p, health, topBlocker };
+  });
+  sendJson(res, 200, { data: augmented });
 }
 
 /** GET /api/projects/:path */
