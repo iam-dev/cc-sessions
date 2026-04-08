@@ -26,6 +26,7 @@ export async function saveSnapshot(
   store: SessionStore,
   config: Config,
   tag: string,
+  forceAI = false,
 ): Promise<void> {
   const parsed = parseLogFile(logPath);
 
@@ -33,7 +34,7 @@ export async function saveSnapshot(
     return;
   }
 
-  const summary = await resolveSummary(parsed, config);
+  const summary = await resolveSummary(parsed, config, forceAI);
   const sessionMemory = buildMemory(parsed, summary, logPath);
 
   // Upsert: if a record already exists for this Claude session, reuse its id
@@ -53,43 +54,9 @@ export async function saveSnapshot(
 
 // ─── private helpers ──────────────────────────────────────────────────────────
 
-async function resolveSummary(parsed: ParsedSession, config: Config): Promise<SessionSummary> {
-  if (config.autoSave.generateSummary) {
-    try {
-      return await generateSummary(parsed, config.summaries);
-    } catch {
-      // fall through to rule-based
-    }
-  }
-  return fallbackSummary(parsed);
-}
-
-function fallbackSummary(parsed: ParsedSession): SessionSummary {
-  const projectName = path.basename(parsed.projectPath);
-  const fileCount = parsed.filesCreated.length + parsed.filesModified.length;
-
-  return {
-    summary: fileCount > 0
-      ? `Session in ${projectName}: modified ${fileCount} file${fileCount !== 1 ? 's' : ''}`
-      : `Session in ${projectName}: ${parsed.messagesCount} message${parsed.messagesCount !== 1 ? 's' : ''}`,
-    description: [
-      `Worked on ${projectName} for ${parsed.duration} minute${parsed.duration !== 1 ? 's' : ''}.`,
-      parsed.filesCreated.length > 0
-        ? `Created ${parsed.filesCreated.length} file${parsed.filesCreated.length !== 1 ? 's' : ''}.`
-        : null,
-      parsed.filesModified.length > 0
-        ? `Modified ${parsed.filesModified.length} file${parsed.filesModified.length !== 1 ? 's' : ''}.`
-        : null,
-      parsed.tokensUsed > 0
-        ? `Used ${Math.round(parsed.tokensUsed / 1000)}K tokens.`
-        : null,
-    ].filter(Boolean).join(' '),
-    tasks: [],
-    nextSteps: [],
-    keyDecisions: [],
-    blockers: [],
-    tags: [],
-  };
+async function resolveSummary(parsed: ParsedSession, config: Config, forceAI: boolean): Promise<SessionSummary> {
+  const skipAI = !forceAI && !config.autoSave.generateSummary;
+  return generateSummary(parsed, config.summaries, skipAI);
 }
 
 function buildMemory(

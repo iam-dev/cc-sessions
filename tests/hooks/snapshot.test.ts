@@ -100,4 +100,22 @@ describe('saveSnapshot', () => {
 
     expect(store.getAll()).toHaveLength(0);
   });
+
+  it('result has no-ai-summary tag when skipAI is used (via config gate=false)', async () => {
+    // testConfig has generateSummary: false, so it falls through to rule-based
+    await saveSnapshot(logPath, store, testConfig, 'snapshot');
+
+    const all = store.getAll();
+    expect(all[0].tags).toContain('no-ai-summary');
+  });
+
+  it('combined tags preserved on upsert: snapshot then pre-clear', async () => {
+    await saveSnapshot(logPath, store, testConfig, 'snapshot');
+    await saveSnapshot(logPath, store, testConfig, 'pre-clear');
+
+    const all = store.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].tags).toContain('snapshot');
+    expect(all[0].tags).toContain('pre-clear');
+  });
 });
