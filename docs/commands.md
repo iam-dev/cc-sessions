@@ -418,6 +418,42 @@ Sessions saved with this command are tagged `snapshot` in the database. Sessions
 
 ---
 
+## cc-sessions summarize
+
+Regenerate AI summaries for sessions that were saved with rule-based summaries.
+
+```bash
+cc-sessions summarize [session-id]   # regenerate one specific session
+cc-sessions summarize                # regenerate sessions tagged no-ai-summary (default)
+cc-sessions summarize --all          # force-regenerate every session
+cc-sessions summarize --no-ai        # rule-based only (no AI providers)
+cc-sessions summarize --limit <n>    # cap sessions processed (default: 50)
+```
+
+### When to use
+
+After running `cc-sessions import`, many sessions will have `no-ai-summary` tags if AI was unavailable during import. Run `cc-sessions summarize` to retroactively upgrade those summaries.
+
+### Output
+
+```
+Scanning for sessions to summarize...
+Found 47 sessions.
+
+[  1/47] myapp: Updated import docs...             ✅ CC CLI
+[  2/47] cc-sessions: Add authentication...        ✅ API
+[  3/47] project: Refactored nav...                ✅ rule-based
+[  4/47] VlamGuard: Log file not found, skipping   ⚠️  skipped
+
+Done. 44 updated, 3 skipped.
+```
+
+### Provider chain
+
+Tries in order: CC CLI (`claude`) → Anthropic API (`ANTHROPIC_API_KEY`) → rule-based fallback.
+
+---
+
 ## cc-sessions import
 
 Bulk-import Claude Code CLI sessions from `~/.claude/projects/` into the cc-sessions database.
@@ -476,3 +512,50 @@ Found 142 session files, 38 already imported.
 ```
 
 Imported sessions are tagged with `"imported"` so you can filter or identify them later.
+
+---
+
+## /sessions:import
+
+Import all Claude Code CLI sessions from `~/.claude/projects/` with AI-generated summaries.
+
+```
+/sessions:import
+```
+
+Runs `cc-sessions import --limit 9999`, shows the output, then displays the 5 most recent imported sessions so you can verify summary quality. If many show `no-ai-summary` tags, suggests running `cc-sessions summarize`.
+
+---
+
+## /sessions:clear
+
+Save the current session with a full AI summary, then clear context.
+
+```
+/sessions:clear
+```
+
+Runs `cc-sessions save`, reports the saved session ID, then runs `/clear`. If the save fails (e.g., the session is too new), warns the user before clearing.
+
+Use this instead of `/clear` when you want to preserve your session before starting a new context.
+
+---
+
+## Auto-save on /clear (SessionStart hook)
+
+cc-sessions can automatically save your session whenever you type `/clear`. This is set up automatically when using the plugin. For standalone (npm install) setup, add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "clear",
+        "hooks": [{ "type": "command", "command": "cc-sessions on-clear" }]
+      }
+    ]
+  }
+}
+```
+
+Sessions saved this way are tagged `pre-clear` and show a 🗑️ badge in the UI.
