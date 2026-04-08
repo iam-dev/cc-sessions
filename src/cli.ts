@@ -742,7 +742,7 @@ program
       const logPath = findCurrentSessionLog(claudeSessionId ?? '', process.cwd());
 
       if (!logPath) {
-        console.error('No session log found — run this command from your project directory');
+        console.error('⚠️  No session log found — run this command from your project directory');
         process.exit(1);
       }
 
@@ -750,10 +750,10 @@ program
 
       // Read back the saved session to display its claudeSessionId
       const sessions = store.getRecent(1);
-      const savedId  = sessions[0]?.claudeSessionId ?? logPath;
-      console.log(`Session saved: ${savedId} (pre-clear snapshot)`);
+      const savedId  = sessions[0]?.claudeSessionId ?? path.basename(logPath, '.jsonl');
+      console.log(`✅ Session saved: ${savedId} (pre-clear snapshot)`);
     } catch (err) {
-      console.error('Save failed:', err instanceof Error ? err.message : String(err));
+      console.error(`❌ Save failed: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     } finally {
       store.close();
