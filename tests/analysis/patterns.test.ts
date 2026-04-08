@@ -73,6 +73,10 @@ describe('normalizeBlocker', () => {
     expect(normalizeBlocker('auth   service   down')).toBe('auth   service   down'.replace(/\s+/g, ' ').trim());
   });
 
+  it('strips "failure " prefix', () => {
+    expect(normalizeBlocker('failure to connect')).toBe('to connect');
+  });
+
   it('handles already-normalized input unchanged', () => {
     expect(normalizeBlocker('database unreachable')).toBe('database unreachable');
   });
