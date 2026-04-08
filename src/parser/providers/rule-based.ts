@@ -21,10 +21,12 @@ export function ruleBasedSummary(parsed: ParsedSession): SessionSummary {
   const nextSteps   = extractNextSteps(parsed.assistantMessages);
   const techTags    = extractTags(parsed.userMessages, parsed.assistantMessages, allFiles);
 
+  const title = buildTitle(projectName, firstUserMsg, allFiles);
   const summary = buildSummary(projectName, firstUserMsg, fileCount, allFiles);
   const description = buildDescription(projectName, firstUserMsg, parsed);
 
   return {
+    title,
     summary,
     description,
     tasks,
@@ -36,6 +38,22 @@ export function ruleBasedSummary(parsed: ParsedSession): SessionSummary {
 }
 
 // ─── private helpers ──────────────────────────────────────────────────────────
+
+function buildTitle(
+  projectName: string,
+  firstUserMsg: string,
+  files: string[],
+): string {
+  if (firstUserMsg) {
+    // Use first line, truncated to ~40 chars (keeps it readable in the sidebar)
+    return firstUserMsg.split('\n')[0].slice(0, 40).trim();
+  }
+  if (files.length > 0) {
+    const name = path.basename(files[0]);
+    return files.length > 1 ? `Edit ${name} +${files.length - 1}` : `Edit ${name}`;
+  }
+  return projectName;
+}
 
 function buildSummary(
   projectName: string,

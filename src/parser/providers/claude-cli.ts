@@ -12,7 +12,7 @@
 import { spawn } from 'child_process';
 import type { ParsedSession, SessionSummary, Task } from '../../types';
 
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 120_000;
 
 const CLI_PROMPT_TEMPLATE = `Analyze this Claude Code session and produce a JSON summary.
 
@@ -28,7 +28,7 @@ Recent assistant responses:
 {assistantMessages}
 
 Respond ONLY with valid JSON matching exactly:
-{"summary":"one sentence","description":"2-3 sentences","tasks":[{"description":"...","status":"completed|pending"}],"nextSteps":["..."],"keyDecisions":["..."],"blockers":["..."],"tags":["..."]}`;
+{"title":"3-6 word title","summary":"one sentence","description":"2-3 sentences","tasks":[{"description":"...","status":"completed|pending"}],"nextSteps":["..."],"keyDecisions":["..."],"blockers":["..."],"tags":["..."]}`;
 
 interface CliEnvelope {
   type?: string;
@@ -83,8 +83,18 @@ function runClaude(prompt: string): Promise<string> {
     let stdout = '';
     let stderr = '';
 
-    const child = spawn('claude', ['-p', prompt, '--output-format', 'json'], {
+    const env = { ...process.env };
+    delete env['CLAUDECODE'];
+
+    const child = spawn('claude', [
+      '-p', prompt,
+      '--output-format', 'json',
+      '--model', 'haiku',
+      '--disable-slash-commands',
+    ], {
       signal: controller.signal,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
@@ -125,6 +135,7 @@ function parseSessionSummary(jsonStr: string): SessionSummary | null {
     if (!data['summary']) return null;
 
     return {
+      title:        String(data['title'] ?? ''),
       summary:      String(data['summary']),
       description:  String(data['description'] ?? ''),
       tasks:        normalizeTasks(data['tasks']),

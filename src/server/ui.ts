@@ -403,6 +403,9 @@ export function getUIHtml(): string {
       Projects
     </div>
     <div class="view-header"><h1 class="view-title" id="proj-title"></h1></div>
+    <div class="toolbar">
+      <input type="search" class="toolbar-search" id="proj-session-filter" placeholder="Filter sessions\u2026" autocomplete="off">
+    </div>
     <div class="sessions-list" id="proj-list"></div>
   </div>
 
@@ -639,9 +642,10 @@ function healthBadgeNode(health) {
 
 /* ─── state ──────────────────────────────────────────────────────────────── */
 var state = {
-  projects:    [],
-  currentView: 'projects',
-  backView:    'projects',
+  projects:     [],
+  projSessions: [],
+  currentView:  'projects',
+  backView:     'projects',
 };
 
 /* ─── view management ────────────────────────────────────────────────────── */
@@ -739,7 +743,7 @@ function sortProjects() {
 function buildSessionCard(s, backView) {
   var health = computeHealth(s);
   var header = h('div', { class: 'session-card-header' },
-    h('div', { class: 'session-card-title', text: trunc(s.summary || 'Untitled session', 90) }),
+    h('div', { class: 'session-card-title', text: trunc(s.title || s.summary || 'Untitled session', 90) }),
     h('div', { class: 'session-card-time',  text: relativeTime(s.startedAt) }),
     healthDotNode(health)
   );
@@ -808,7 +812,7 @@ function loadRecents() {
       var item = h('div', { class: 'recent-item',
                              title: s.summary || '',
                              click: function() { openDetail(s.id, 'projects'); } },
-        txt(trunc(s.summary || 'Untitled', 34))
+        txt(trunc(s.title || s.summary || 'Untitled', 34))
       );
       list.appendChild(item);
     });
@@ -836,6 +840,7 @@ function loadStats() {
 /* ─── project sessions ───────────────────────────────────────────────────── */
 function openProject(projectPath, projectName) {
   document.getElementById('proj-title').textContent = projectName;
+  document.getElementById('proj-session-filter').value = '';
   showView('proj-sessions');
 
   var list = document.getElementById('proj-list');
@@ -844,7 +849,8 @@ function openProject(projectPath, projectName) {
 
   get('/api/sessions?project=' + encodeURIComponent(projectPath) + '&limit=50')
     .then(function(res) {
-      renderSessionList(Array.isArray(res.data) ? res.data : [], list, 'proj-sessions');
+      state.projSessions = Array.isArray(res.data) ? res.data : [];
+      renderSessionList(state.projSessions, list, 'proj-sessions');
     });
 }
 
@@ -931,7 +937,7 @@ function openDetail(sessionId, backView) {
     }
 
     var s = res.data;
-    document.getElementById('detail-heading').textContent = trunc(s.summary || 'Untitled Session', 80);
+    document.getElementById('detail-heading').textContent = trunc(s.title || s.summary || 'Untitled Session', 80);
 
     var detailHealth = computeHealth(s);
     var badgeWrap = h('div', { style: 'padding: 0 48px 8px' });
@@ -1147,6 +1153,18 @@ document.getElementById('proj-filter').addEventListener('input', function(e) {
 });
 
 document.getElementById('proj-sort').addEventListener('change', sortProjects);
+
+document.getElementById('proj-session-filter').addEventListener('input', function(e) {
+  var q = e.target.value.trim().toLowerCase();
+  var list = document.getElementById('proj-list');
+  if (!q) { renderSessionList(state.projSessions, list, 'proj-sessions'); return; }
+  var filtered = state.projSessions.filter(function(s) {
+    return (s.title || '').toLowerCase().includes(q) ||
+           (s.description || '').toLowerCase().includes(q) ||
+           (s.summary || '').toLowerCase().includes(q);
+  });
+  renderSessionList(filtered, list, 'proj-sessions');
+});
 
 /* ─── init ───────────────────────────────────────────────────────────────── */
 Promise.all([loadRecents(), loadProjects()]).then(loadStats).catch(function(err) {

@@ -20,6 +20,7 @@ export interface SessionMemory {
   duration: number; // Minutes
 
   // Content Summary
+  title: string;
   summary: string;
   description: string;
 
@@ -97,7 +98,7 @@ export interface SearchOptions {
 // ============================================
 
 export interface RawLogEntry {
-  type: 'human' | 'assistant' | 'tool_use' | 'tool_result' | 'system';
+  type: 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'system' | 'progress' | string;
   timestamp: string;
   content?: string;
   message?: {
@@ -148,6 +149,7 @@ export interface ParsedSession {
 // ============================================
 
 export interface SessionSummary {
+  title: string;
   summary: string;
   description: string;
   tasks: Task[];

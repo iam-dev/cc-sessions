@@ -37,6 +37,7 @@ function createCheckpointMemory(
     startedAt: parsed.startTime,
     endedAt: new Date(), // Current time as checkpoint
     duration: parsed.duration,
+    title: parsed.userMessages[0]?.split('\n')[0].slice(0, 40).trim() || projectName,
     summary: fileCount > 0
       ? `[In Progress] ${projectName}: ${fileCount} file${fileCount !== 1 ? 's' : ''} modified`
       : `[In Progress] ${projectName}: ${parsed.messagesCount} messages`,

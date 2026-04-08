@@ -37,7 +37,7 @@ export function parseLogFile(logPath: string): ParsedSession {
   }
 
   // Extract different message types
-  const userMessages = entries.filter(e => e.type === 'human');
+  const userMessages = entries.filter(e => e.type === 'user');
   const assistantMessages = entries.filter(e => e.type === 'assistant');
   const toolCalls = extractToolCalls(entries);
 

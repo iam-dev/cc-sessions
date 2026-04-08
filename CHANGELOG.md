@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-08
+
+### Added
+
+#### Session Title Field
+- **`title` on `SessionMemory` / `SessionSummary`** — new short (3–6 word) title field added to both core types; all three AI providers (CC CLI, Anthropic API, rule-based) now generate and return a title alongside the existing `summary`
+- **`rule-based` provider `buildTitle()`** — derives a title from the first line of the first user message (≤ 40 chars), falls back to a file-based label or the project name
+- **DB `title TEXT` column** — persisted in the `sessions` table; automatic `ALTER TABLE` migration runs on startup for databases that pre-date this field; `save()` / row-mapper updated throughout
+- **All save paths updated** — `session-end`, `snapshot`, `periodic-save` hooks, the importer, and `cc-sessions summarize` all propagate the title when building or updating a session record
+
+#### Session Filter in Project View
+- **Search input in project sessions panel** — a new "Filter sessions…" toolbar input appears above the session list when viewing a project; filters in real-time against `title`, `summary`, and `description` without a round-trip to the server; cleared automatically on project open
+
+### Changed
+
+- **UI session cards / recent list / detail heading** — now display `title` (falling back to `summary`) for a tighter, more readable label
+- **CC CLI provider** — timeout raised from 30 s → 120 s; subprocess now spawned with `--model haiku`, `--disable-slash-commands`, explicit `stdio: ['ignore','pipe','pipe']`, and `CLAUDECODE` stripped from the env to prevent recursive invocation
+
+### Fixed
+
+- **`type === 'human'` → `type === 'user'`** — JSONL log entries use `"user"` not `"human"`; fixed in both `src/parser/jsonl.ts` (user-message extraction) and `src/server/index.ts` (message thread endpoint)
+- **`RawLogEntry.type`** — union type broadened to include `'user'`, `'progress'`, and `string` to match the actual JSONL format
+
+---
+
 ## [2.0.0] - 2026-04-08
 
 ### Added

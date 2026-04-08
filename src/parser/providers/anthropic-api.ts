@@ -28,6 +28,7 @@ Recent assistant responses:
 
 Respond ONLY with valid JSON in this exact format (no markdown, no explanation):
 {
+  "title": "3-6 word title",
   "summary": "One concise sentence describing what was accomplished",
   "description": "2-3 sentences explaining the work done and current state",
   "tasks": [
@@ -100,6 +101,7 @@ function parseResponse(text: string): SessionSummary | null {
     if (!data['summary']) return null;
 
     return {
+      title:        String(data.title ?? ''),
       summary:      String(data.summary ?? ''),
       description:  String(data.description ?? ''),
       tasks:        normalizeTasks(data.tasks),

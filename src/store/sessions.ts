@@ -46,6 +46,7 @@ export class SessionStore {
         started_at INTEGER NOT NULL,
         ended_at INTEGER NOT NULL,
         duration INTEGER NOT NULL,
+        title TEXT,
         summary TEXT,
         description TEXT,
         tasks_json TEXT DEFAULT '[]',
@@ -126,6 +127,12 @@ export class SessionStore {
         VALUES (new.rowid, new.id, new.summary, new.description, new.tasks_json, new.files_created_json || ' ' || new.files_modified_json, new.last_user_message, new.last_assistant_message, new.tags_json);
       END;
     `);
+
+    // Migration: add title column to existing databases that pre-date this field
+    const cols = (this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map(c => c.name);
+    if (!cols.includes('title')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN title TEXT');
+    }
   }
 
   /**
@@ -136,7 +143,7 @@ export class SessionStore {
       INSERT OR REPLACE INTO sessions (
         id, claude_session_id, project_path, project_name,
         started_at, ended_at, duration,
-        summary, description,
+        title, summary, description,
         tasks_json, tasks_completed, tasks_pending,
         files_created_json, files_modified_json, files_deleted_json,
         last_user_message, last_assistant_message,
@@ -148,7 +155,7 @@ export class SessionStore {
       ) VALUES (
         ?, ?, ?, ?,
         ?, ?, ?,
-        ?, ?,
+        ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
         ?, ?,
@@ -168,6 +175,7 @@ export class SessionStore {
       session.startedAt.getTime(),
       session.endedAt.getTime(),
       session.duration,
+      session.title || '',
       session.summary,
       session.description,
       JSON.stringify(session.tasks),
@@ -529,6 +537,7 @@ export class SessionStore {
       startedAt: new Date(Number(row.started_at)),
       endedAt: new Date(Number(row.ended_at)),
       duration: Number(row.duration),
+      title: String(row.title || ''),
       summary: String(row.summary || ''),
       description: String(row.description || ''),
       tasks: this.parseJson<Task>(row.tasks_json),

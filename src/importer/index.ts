@@ -201,6 +201,7 @@ function buildSessionMemory(
     startedAt: parsed.startTime,
     endedAt: parsed.endTime,
     duration: parsed.duration,
+    title: summary.title,
     summary: summary.summary,
     description: summary.description,
     tasks: summary.tasks,

@@ -834,6 +834,7 @@ program
 
           store.save({
             ...s,
+            title:          newSummary.title,
             summary:        newSummary.summary,
             description:    newSummary.description,
             tasks:          newSummary.tasks,

@@ -11,5 +11,6 @@
   "repository": "https://github.com/iam-dev/cc-sessions",
   "keywords": ["session", "memory", "context", "persistence"],
   "commands": "./commands",
+  "skills": "./skills",
   "hooks": "./hooks/hooks.json"
 }

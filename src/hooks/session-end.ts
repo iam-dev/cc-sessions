@@ -37,6 +37,7 @@ function createSessionMemory(
     startedAt: parsed.startTime,
     endedAt: parsed.endTime,
     duration: parsed.duration,
+    title: summary.title,
     summary: summary.summary,
     description: summary.description,
     tasks: summary.tasks,
@@ -143,7 +144,9 @@ function createFallbackSummary(parsed: ParsedSession): SessionSummary {
   const projectName = path.basename(parsed.projectPath);
   const fileCount = parsed.filesCreated.length + parsed.filesModified.length;
 
+  const firstMsg = parsed.userMessages[0]?.split('\n')[0].slice(0, 40).trim() ?? '';
   return {
+    title: firstMsg || projectName,
     summary: fileCount > 0
       ? `Session in ${projectName}: modified ${fileCount} file${fileCount !== 1 ? 's' : ''}`
       : `Session in ${projectName}: ${parsed.messagesCount} messages`,
