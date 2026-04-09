@@ -314,23 +314,103 @@ function handleStats(
   sendJson(res, 200, { data: stats });
 }
 
+// ─── body parsing ─────────────────────────────────────────────────────────────
+
+/**
+ * Collect all chunks from the request stream and parse as JSON.
+ * Resolves to the parsed value, or rejects with a SyntaxError on malformed input.
+ */
+async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+}
+
 // ─── router ───────────────────────────────────────────────────────────────────
 
 /**
  * Route an incoming request to the appropriate handler.
  */
-function route(
+async function route(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   store: SessionStore,
   memoryStore: MemoryStore | undefined,
-): void {
-  if (req.method !== 'GET') {
-    sendJson(res, 405, { error: 'Method not allowed' });
-    return;
+): Promise<void> {
+  const method = req.method ?? 'GET';
+  const pathname = url.parse(req.url ?? '').pathname ?? '/';
+
+  // ── Memory mutation routes (PUT / POST) ──────────────────────────────────
+
+  if (method === 'POST' && pathname === '/api/memory/sync') {
+    if (!memoryStore) return sendJson(res, 503, { error: 'Memory store not available' });
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON' });
+    }
+    const { projectPath: syncPath } = body as { projectPath?: string };
+    if (!syncPath || typeof syncPath !== 'string') {
+      return sendJson(res, 400, { error: 'projectPath required' });
+    }
+    const result = memoryStore.syncProject(syncPath);
+    return sendJson(res, 200, { data: { result } });
   }
 
-  const pathname = url.parse(req.url ?? '').pathname ?? '/';
+  if (method === 'POST' && pathname === '/api/memory/create-claude-md') {
+    if (!memoryStore) return sendJson(res, 503, { error: 'Memory store not available' });
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON' });
+    }
+    const { projectPath: claudePath, content } = body as { projectPath?: string; content?: string };
+    if (!claudePath || typeof claudePath !== 'string') {
+      return sendJson(res, 400, { error: 'projectPath required' });
+    }
+    const targetPath = path.resolve(claudePath, 'CLAUDE.md');
+    const safeRoot = path.resolve(claudePath) + path.sep;
+    if (!targetPath.startsWith(safeRoot)) {
+      return sendJson(res, 403, { error: 'Path traversal detected' });
+    }
+    if (fs.existsSync(targetPath)) {
+      return sendJson(res, 409, { error: 'CLAUDE.md already exists' });
+    }
+    fs.writeFileSync(targetPath, typeof content === 'string' ? content : '', 'utf8');
+    memoryStore.syncProject(claudePath);
+    return sendJson(res, 201, { data: { path: targetPath } });
+  }
+
+  const memoryIdMatch = pathname.match(/^\/api\/memory\/([^/]+)$/);
+  if (method === 'PUT' && memoryIdMatch) {
+    if (!memoryStore) return sendJson(res, 503, { error: 'Memory store not available' });
+    const id = decodeURIComponent(memoryIdMatch[1]!);
+    let fields: Record<string, unknown>;
+    try {
+      fields = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON' });
+    }
+    try {
+      const updated = memoryStore.update(id, fields as Parameters<MemoryStore['update']>[1]);
+      return sendJson(res, 200, { data: { entry: updated } });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      const status = msg.toLowerCase().includes('not found') ? 404
+        : msg.toLowerCase().includes('traversal') ? 403
+        : msg.toLowerCase().includes('512') ? 400
+        : 500;
+      return sendJson(res, status, { error: msg });
+    }
+  }
+
+  // ── GET-only guard ────────────────────────────────────────────────────────
+
+  if (method !== 'GET') {
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  }
 
   if (pathname === '/') {
     handleRoot(req, res);
@@ -410,7 +490,6 @@ function route(
     return;
   }
 
-  const memoryIdMatch = pathname.match(/^\/api\/memory\/([^/]+)$/);
   if (memoryIdMatch) {
     if (!memoryStore) {
       sendJson(res, 503, { error: 'Memory store not available' });
@@ -444,12 +523,10 @@ function route(
  */
 export function createServer(store: SessionStore, memoryStore?: MemoryStore): ServerHandle {
   const server = http.createServer((req, res) => {
-    try {
-      route(req, res, store, memoryStore);
-    } catch (err) {
+    route(req, res, store, memoryStore).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : 'Internal server error';
       sendJson(res, 500, { error: message });
-    }
+    });
   });
 
   return { server };
