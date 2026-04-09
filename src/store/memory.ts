@@ -105,24 +105,179 @@ export class MemoryStore {
 
   /**
    * Scan memory files for a project and upsert changed entries.
+   * Reads all .md files from the project's memory directory plus any CLAUDE.md,
+   * upserts changed rows, and deletes rows for files no longer present.
    * @param projectPath — absolute filesystem path of the project
    */
-  syncProject(_projectPath: string): SyncMemoryResult {
-    throw new Error('syncProject: not implemented');
+  syncProject(projectPath: string): SyncMemoryResult {
+    const now = Date.now();
+    const seenIds = new Set<string>();
+    let added = 0;
+    let updated = 0;
+
+    // --- auto-memory files ---
+    const memoryDir = path.join(
+      this.memoryBaseDir,
+      encodeProjectPath(projectPath),
+      'memory',
+    );
+
+    if (fs.existsSync(memoryDir)) {
+      const files = fs.readdirSync(memoryDir).filter((f) => f.endsWith('.md'));
+
+      for (const filename of files) {
+        const absoluteFilePath = path.join(memoryDir, filename);
+        const relativeFilePath = path.join('memory', filename);
+        const id = encodeId(projectPath, relativeFilePath);
+        const mtime = fs.statSync(absoluteFilePath).mtimeMs;
+
+        const existing = this.db
+          .prepare('SELECT id, file_mtime FROM memory_entries WHERE id = ?')
+          .get(id) as { id: string; file_mtime: number } | undefined;
+
+        if (existing !== undefined && existing.file_mtime >= mtime) {
+          // No change — skip
+          seenIds.add(id);
+          continue;
+        }
+
+        const content = fs.readFileSync(absoluteFilePath, 'utf8');
+        const { name, description, type, body } = parseFrontmatter(content);
+
+        if (existing === undefined) {
+          this.db
+            .prepare(
+              `INSERT INTO memory_entries
+                (id, project_path, source, type, file_path, name, description, body,
+                 file_mtime, last_indexed_at, created_at, updated_at)
+               VALUES (?, ?, 'auto-memory', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              id,
+              projectPath,
+              type,
+              relativeFilePath,
+              name,
+              description,
+              body,
+              mtime,
+              now,
+              now,
+              now,
+            );
+          added += 1;
+        } else {
+          this.db
+            .prepare(
+              `UPDATE memory_entries
+               SET type = ?, name = ?, description = ?, body = ?,
+                   file_mtime = ?, last_indexed_at = ?, updated_at = ?
+               WHERE id = ?`,
+            )
+            .run(type, name, description, body, mtime, now, now, id);
+          updated += 1;
+        }
+
+        seenIds.add(id);
+      }
+    }
+
+    // --- CLAUDE.md ---
+    const claudeMdCandidates = [
+      path.join(projectPath, 'CLAUDE.md'),
+      path.join(projectPath, '.claude', 'CLAUDE.md'),
+    ];
+
+    for (const claudeMdPath of claudeMdCandidates) {
+      if (!fs.existsSync(claudeMdPath)) continue;
+
+      const relativeFilePath = path.relative(projectPath, claudeMdPath);
+      const id = encodeId(projectPath, relativeFilePath);
+      const mtime = fs.statSync(claudeMdPath).mtimeMs;
+
+      const existing = this.db
+        .prepare('SELECT id, file_mtime FROM memory_entries WHERE id = ?')
+        .get(id) as { id: string; file_mtime: number } | undefined;
+
+      if (existing === undefined || existing.file_mtime < mtime) {
+        const body = fs.readFileSync(claudeMdPath, 'utf8');
+        const name = path.basename(claudeMdPath);
+        const description = 'Project instructions for Claude Code';
+
+        if (existing === undefined) {
+          this.db
+            .prepare(
+              `INSERT INTO memory_entries
+                (id, project_path, source, type, file_path, name, description, body,
+                 file_mtime, last_indexed_at, created_at, updated_at)
+               VALUES (?, ?, 'claude-md', 'claude-md', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              id,
+              projectPath,
+              relativeFilePath,
+              name,
+              description,
+              body,
+              mtime,
+              now,
+              now,
+              now,
+            );
+          added += 1;
+        } else {
+          this.db
+            .prepare(
+              `UPDATE memory_entries
+               SET name = ?, description = ?, body = ?,
+                   file_mtime = ?, last_indexed_at = ?, updated_at = ?
+               WHERE id = ?`,
+            )
+            .run(name, description, body, mtime, now, now, id);
+          updated += 1;
+        }
+      }
+
+      seenIds.add(id);
+      break; // prefer root CLAUDE.md, stop after first found
+    }
+
+    // --- delete rows for files no longer present ---
+    const existing = this.db
+      .prepare('SELECT id FROM memory_entries WHERE project_path = ?')
+      .all(projectPath) as Array<{ id: string }>;
+
+    let deleted = 0;
+    for (const row of existing) {
+      if (!seenIds.has(row.id)) {
+        this.db.prepare('DELETE FROM memory_entries WHERE id = ?').run(row.id);
+        deleted += 1;
+      }
+    }
+
+    return { added, updated, deleted };
   }
 
   /**
-   * Return all memory entries for a project, ordered by file_path.
+   * Return all memory entries for a project, ordered by updated_at DESC.
    */
-  getByProject(_projectPath: string): MemoryEntry[] {
-    throw new Error('getByProject: not implemented');
+  getByProject(projectPath: string): MemoryEntry[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM memory_entries WHERE project_path = ? ORDER BY updated_at DESC',
+      )
+      .all(projectPath) as Record<string, unknown>[];
+    return rows.map((row) => this.rowToEntry(row));
   }
 
   /**
    * Return a single memory entry by its stable ID.
    */
-  getById(_id: string): MemoryEntry | null {
-    throw new Error('getById: not implemented');
+  getById(id: string): MemoryEntry | null {
+    const row = this.db
+      .prepare('SELECT * FROM memory_entries WHERE id = ?')
+      .get(id) as Record<string, unknown> | undefined;
+    return row !== undefined ? this.rowToEntry(row) : null;
   }
 
   /**
@@ -138,9 +293,26 @@ export class MemoryStore {
   search(_query: string, _limit?: number): MemorySearchResult[] {
     throw new Error('search: not implemented');
   }
+
+  /** Map a raw DB row (snake_case) to a MemoryEntry (camelCase). */
+  private rowToEntry(row: Record<string, unknown>): MemoryEntry {
+    return {
+      id: row['id'] as string,
+      projectPath: row['project_path'] as string,
+      source: row['source'] as MemoryEntry['source'],
+      type: row['type'] as MemoryEntry['type'],
+      filePath: row['file_path'] as string,
+      name: row['name'] as string,
+      description: row['description'] as string,
+      body: row['body'] as string,
+      fileMtime: row['file_mtime'] as number,
+      lastIndexedAt: row['last_indexed_at'] as number,
+      createdAt: row['created_at'] as number,
+      updatedAt: row['updated_at'] as number,
+    };
+  }
 }
 
-// These imports will be used by the stub implementations in later tasks.
-// Reference them here to keep the file compilable under strict mode.
-const _futureUse = { encodeProjectPath, encodeId, decodeId, parseFrontmatter, serializeFrontmatter };
+// decodeId and serializeFrontmatter are used by later tasks (update, search).
+const _futureUse = { decodeId, serializeFrontmatter };
 void _futureUse;
