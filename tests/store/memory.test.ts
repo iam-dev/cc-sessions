@@ -197,3 +197,48 @@ describe('update', () => {
     expect(() => store.update('evil', { body: 'pwned' })).toThrow(/path traversal/i);
   });
 });
+
+describe('search', () => {
+  beforeEach(() => {
+    const projectPath = '/test/search';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(tmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'feedback_ts.md'),
+      '---\nname: "TypeScript feedback"\ndescription: "TS rules"\ntype: feedback\n---\nAlways use strict TypeScript.',
+    );
+    fs.writeFileSync(
+      path.join(memDir, 'user_role.md'),
+      '---\nname: "My Role"\ndescription: "Senior engineer"\ntype: user\n---\nI work on backend systems.',
+    );
+    store.syncProject(projectPath);
+  });
+
+  it('returns matching results for a query', () => {
+    const results = store.search('TypeScript');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].entry.name).toBe('TypeScript feedback');
+  });
+
+  it('returns empty array for no match', () => {
+    const results = store.search('xyznonexistent');
+    expect(results).toHaveLength(0);
+  });
+
+  it('filters by projectPath', () => {
+    // Add a second project
+    const p2 = '/test/search2';
+    const e2 = p2.replace(/^\//, '').replace(/\//g, '-');
+    const d2 = path.join(tmpDir, 'memory-base', e2, 'memory');
+    fs.mkdirSync(d2, { recursive: true });
+    fs.writeFileSync(
+      path.join(d2, 'role.md'),
+      '---\nname: "Proj2 TypeScript"\ndescription: "d"\ntype: user\n---\nOther project.',
+    );
+    store.syncProject(p2);
+
+    const results = store.search('TypeScript', { projectPath: '/test/search' });
+    expect(results.every(r => r.entry.projectPath === '/test/search')).toBe(true);
+  });
+});

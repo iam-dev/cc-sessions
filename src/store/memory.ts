@@ -347,10 +347,43 @@ export class MemoryStore {
   }
 
   /**
-   * Full-text search across all indexed memory entries.
+   * Full-text search across all indexed memory entries using FTS5.
+   * Uses prefix matching and BM25 ranking (lower score = better match).
+   * @param query — search terms; prefix-matched automatically
+   * @param options.projectPath — restrict results to a single project
+   * @param options.limit — max results to return (default 20)
    */
-  search(_query: string, _limit?: number): MemorySearchResult[] {
-    throw new Error('search: not implemented');
+  search(
+    query: string,
+    options: { projectPath?: string; limit?: number } = {},
+  ): MemorySearchResult[] {
+    const limit = options.limit ?? 20;
+    let sql = `
+      SELECT s.*, snippet(memory_entries_fts, 2, '<mark>', '</mark>', '…', 32) AS body_hl,
+             bm25(memory_entries_fts) AS score
+      FROM memory_entries_fts
+      JOIN memory_entries s ON memory_entries_fts.rowid = s.rowid
+      WHERE memory_entries_fts MATCH ?
+    `;
+    const params: unknown[] = [query + '*'];
+
+    if (options.projectPath) {
+      sql += ' AND s.project_path = ?';
+      params.push(options.projectPath);
+    }
+    sql += ' ORDER BY score LIMIT ?';
+    params.push(limit);
+
+    const rows = this.db
+      .prepare(sql)
+      .all(...params) as (Record<string, unknown> & { body_hl: string; score: number })[];
+
+    return rows.map((row) => ({
+      entry: this.rowToEntry(row),
+      projectName: path.basename(row['project_path'] as string),
+      score: row.score,
+      bodyHighlight: row.body_hl,
+    }));
   }
 
   /** Map a raw DB row (snake_case) to a MemoryEntry (camelCase). */
