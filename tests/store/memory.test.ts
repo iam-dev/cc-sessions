@@ -155,3 +155,45 @@ describe('getById', () => {
     expect(store.getById('nonexistent')).toBeNull();
   });
 });
+
+describe('update', () => {
+  it('writes to disk and updates db for auto-memory entry', () => {
+    const projectPath = '/test/upd';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(tmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    const filePath = path.join(memDir, 'role.md');
+    fs.writeFileSync(filePath, '---\nname: "R"\ndescription: "d"\ntype: user\n---\nOld.');
+
+    store.syncProject(projectPath);
+    const entries = store.getByProject(projectPath);
+    const id = entries[0].id;
+
+    store.update(id, { name: 'New Name', description: 'New Desc', body: 'New body.' });
+
+    const updated = store.getById(id)!;
+    expect(updated.name).toBe('New Name');
+    expect(updated.description).toBe('New Desc');
+    expect(updated.body).toBe('New body.');
+
+    // Verify disk was also updated
+    const diskContent = fs.readFileSync(filePath, 'utf8');
+    expect(diskContent).toContain('New body.');
+    expect(diskContent).toContain('New Name');
+  });
+
+  it('throws if entry not found', () => {
+    expect(() => store.update('bad-id', { body: 'x' })).toThrow();
+  });
+
+  it('rejects path traversal attempts', () => {
+    // Manually insert a dangerous entry
+    const db = (store as unknown as { db: import('better-sqlite3').Database }).db;
+    db.prepare(`
+      INSERT INTO memory_entries (id, project_path, source, type, file_path, name, description, body, file_mtime, last_indexed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('evil', '/safe', 'auto-memory', 'user', '/etc/passwd', 'E', 'd', 'body', 0, 0);
+
+    expect(() => store.update('evil', { body: 'pwned' })).toThrow(/path traversal/i);
+  });
+});

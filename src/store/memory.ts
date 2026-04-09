@@ -281,10 +281,69 @@ export class MemoryStore {
   }
 
   /**
-   * Overwrite the body of an existing memory entry and update its file on disk.
+   * Update name, description, and/or body of an existing memory entry.
+   * Writes the change to disk, then syncs the DB row.
+   * Throws if the entry does not exist or if a path traversal is detected.
    */
-  update(_id: string, _body: string): void {
-    throw new Error('update: not implemented');
+  update(
+    id: string,
+    fields: Partial<Pick<MemoryEntry, 'name' | 'description' | 'body'>>,
+  ): MemoryEntry {
+    const entry = this.getById(id);
+    if (entry === null) {
+      throw new Error(`Memory entry not found: ${id}`);
+    }
+
+    // Resolve the absolute file path safely
+    const absoluteFilePath = path.isAbsolute(entry.filePath)
+      ? entry.filePath
+      : entry.source === 'auto-memory'
+        ? path.join(
+            this.memoryBaseDir,
+            encodeProjectPath(entry.projectPath),
+            entry.filePath,
+          )
+        : path.join(entry.projectPath, entry.filePath);
+
+    const resolved = path.resolve(absoluteFilePath);
+    const safeRoots = [this.memoryBaseDir, entry.projectPath];
+    const isSafe = safeRoots.some((root) =>
+      resolved.startsWith(root + path.sep),
+    );
+    if (!isSafe) {
+      throw new Error(
+        `Path traversal detected: ${resolved} is outside allowed directories`,
+      );
+    }
+
+    const newName = fields.name ?? entry.name;
+    const newDesc = fields.description ?? entry.description;
+    const newBody = fields.body ?? entry.body;
+
+    if (entry.source === 'auto-memory') {
+      fs.writeFileSync(
+        resolved,
+        serializeFrontmatter(newName, newDesc, entry.type, newBody),
+        'utf8',
+      );
+    } else {
+      fs.writeFileSync(resolved, newBody, 'utf8');
+    }
+
+    const stat = fs.statSync(resolved);
+    const newMtime = stat.mtimeMs;
+    const now = Date.now();
+
+    this.db
+      .prepare(
+        `UPDATE memory_entries
+         SET name = ?, description = ?, body = ?,
+             file_mtime = ?, last_indexed_at = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(newName, newDesc, newBody, newMtime, now, now, id);
+
+    return this.getById(id)!;
   }
 
   /**
@@ -313,6 +372,6 @@ export class MemoryStore {
   }
 }
 
-// decodeId and serializeFrontmatter are used by later tasks (update, search).
-const _futureUse = { decodeId, serializeFrontmatter };
+// decodeId is used by later tasks (search).
+const _futureUse = { decodeId };
 void _futureUse;
