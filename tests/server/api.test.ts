@@ -8,6 +8,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { SessionStore } from '../../src/store/sessions';
+import { MemoryStore } from '../../src/store/memory';
 import { createServer } from '../../src/server/index';
 import type { SessionMemory } from '../../src/types';
 
@@ -19,6 +20,7 @@ function makeSession(overrides: Partial<SessionMemory> = {}): SessionMemory {
     claudeSessionId: 'claude-test',
     projectPath: '/test/project',
     projectName: 'test-project',
+    title: 'Test Session',
     startedAt: new Date('2024-06-01T10:00:00Z'),
     endedAt: new Date('2024-06-01T10:30:00Z'),
     duration: 30,
@@ -393,5 +395,115 @@ describe('Sessions HTTP API', () => {
       expect(status).toBe(400);
       expect((body as { error: string }).error).toContain('limit');
     });
+  });
+});
+
+// ─── Memory API tests ────────────────────────────────────────────────────────
+
+describe('Memory API', () => {
+  let server: http.Server;
+  let store: SessionStore;
+  let memoryStore: MemoryStore;
+  let port: number;
+  let tmpDir: string;
+  let memTmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-sessions-mem-api-'));
+    memTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-mem-api-'));
+    store = new SessionStore(path.join(tmpDir, 'test.db'));
+    memoryStore = new MemoryStore(
+      path.join(tmpDir, 'test.db'),
+      path.join(memTmpDir, 'memory-base'),
+    );
+    memoryStore.initialize();
+    ({ server } = createServer(store, memoryStore));
+
+    await new Promise<void>(resolve => {
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        port = typeof addr === 'object' && addr !== null ? addr.port : 0;
+        resolve();
+      });
+    });
+  });
+
+  afterEach(async () => {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    memoryStore.close();
+    store.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(memTmpDir, { recursive: true, force: true });
+  });
+
+  test('GET /api/memory?projectPath=... returns entries', async () => {
+    const projectPath = '/test/api-proj';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'role.md'),
+      '---\nname: "R"\ndescription: "d"\ntype: user\n---\nBody.',
+    );
+    memoryStore.syncProject(projectPath);
+
+    const { status, body } = await get(port, `/api/memory?projectPath=${encodeURIComponent(projectPath)}`);
+    expect(status).toBe(200);
+    const { data } = body as { data: Array<{ name: string }> };
+    expect(data).toHaveLength(1);
+    expect(data[0]!.name).toBe('R');
+  });
+
+  test('GET /api/memory returns 400 when projectPath is missing', async () => {
+    const { status, body } = await get(port, '/api/memory');
+    expect(status).toBe(400);
+    expect((body as { error: string }).error).toBeTruthy();
+  });
+
+  test('GET /api/memory/search?q=... returns results', async () => {
+    const projectPath = '/test/search-api';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'ref.md'),
+      '---\nname: "Grafana"\ndescription: "Monitoring"\ntype: reference\n---\nUse Grafana for metrics.',
+    );
+    memoryStore.syncProject(projectPath);
+
+    const { status, body } = await get(port, '/api/memory/search?q=Grafana');
+    expect(status).toBe(200);
+    const { data } = body as { data: unknown[] };
+    expect(data.length).toBeGreaterThan(0);
+  });
+
+  test('GET /api/memory/search returns 400 when q is missing', async () => {
+    const { status, body } = await get(port, '/api/memory/search');
+    expect(status).toBe(400);
+    expect((body as { error: string }).error).toBeTruthy();
+  });
+
+  test('GET /api/memory/:id returns single entry', async () => {
+    const projectPath = '/test/gb-api';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'x.md'),
+      '---\nname: "X"\ndescription: "d"\ntype: user\n---\nBody.',
+    );
+    memoryStore.syncProject(projectPath);
+    const entries = memoryStore.getByProject(projectPath);
+    const id = entries[0]!.id;
+
+    const { status, body } = await get(port, `/api/memory/${encodeURIComponent(id)}`);
+    expect(status).toBe(200);
+    const { data } = body as { data: { name: string } };
+    expect(data.name).toBe('X');
+  });
+
+  test('GET /api/memory/:id returns 404 for unknown id', async () => {
+    const { status } = await get(port, '/api/memory/nonexistent');
+    expect(status).toBe(404);
   });
 });

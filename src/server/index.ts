@@ -13,6 +13,7 @@ import * as url from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SessionStore } from '../store/sessions';
+import { MemoryStore } from '../store/memory';
 import { getUIHtml } from './ui';
 import { aggregateProjectHealth } from '../analysis/health';
 import { getRecurringBlockers } from '../analysis/patterns';
@@ -322,6 +323,7 @@ function route(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   store: SessionStore,
+  memoryStore: MemoryStore | undefined,
 ): void {
   if (req.method !== 'GET') {
     sendJson(res, 405, { error: 'Method not allowed' });
@@ -373,6 +375,56 @@ function route(
     return;
   }
 
+  if (pathname === '/api/memory') {
+    const memParams = new URLSearchParams(url.parse(req.url ?? '').search ?? '');
+    const projectPath = memParams.get('projectPath');
+    if (!projectPath) {
+      sendJson(res, 400, { error: 'projectPath required' });
+      return;
+    }
+    if (!memoryStore) {
+      sendJson(res, 503, { error: 'Memory store not available' });
+      return;
+    }
+    const entries = memoryStore.getByProject(projectPath);
+    sendJson(res, 200, { data: entries });
+    return;
+  }
+
+  if (pathname === '/api/memory/search') {
+    const memParams = new URLSearchParams(url.parse(req.url ?? '').search ?? '');
+    const q = memParams.get('q');
+    if (!q) {
+      sendJson(res, 400, { error: 'q required' });
+      return;
+    }
+    if (!memoryStore) {
+      sendJson(res, 503, { error: 'Memory store not available' });
+      return;
+    }
+    const projectPath = memParams.get('projectPath') ?? undefined;
+    const limitParam = memParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+    const results = memoryStore.search(q, { projectPath, limit });
+    sendJson(res, 200, { data: results });
+    return;
+  }
+
+  const memoryIdMatch = pathname.match(/^\/api\/memory\/([^/]+)$/);
+  if (memoryIdMatch) {
+    if (!memoryStore) {
+      sendJson(res, 503, { error: 'Memory store not available' });
+      return;
+    }
+    const entry = memoryStore.getById(decodeURIComponent(memoryIdMatch[1]!));
+    if (!entry) {
+      sendJson(res, 404, { error: 'Not found' });
+      return;
+    }
+    sendJson(res, 200, { data: entry });
+    return;
+  }
+
   sendJson(res, 404, { error: 'Route not found: ' + pathname });
 }
 
@@ -390,10 +442,10 @@ function route(
  * server.listen(3456, '127.0.0.1', () => console.log('Ready'));
  * ```
  */
-export function createServer(store: SessionStore): ServerHandle {
+export function createServer(store: SessionStore, memoryStore?: MemoryStore): ServerHandle {
   const server = http.createServer((req, res) => {
     try {
-      route(req, res, store);
+      route(req, res, store, memoryStore);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Internal server error';
       sendJson(res, 500, { error: message });
