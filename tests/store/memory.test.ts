@@ -186,6 +186,19 @@ describe('update', () => {
     expect(() => store.update('bad-id', { body: 'x' })).toThrow();
   });
 
+  it('throws for body > 512 KB', () => {
+    const projectPath = '/test/big';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(tmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    const filePath = path.join(memDir, 'big.md');
+    fs.writeFileSync(filePath, '---\nname: "B"\ndescription: "d"\ntype: user\n---\nBody.');
+    store.syncProject(projectPath);
+    const entries = store.getByProject(projectPath);
+    const id = entries[0].id;
+    expect(() => store.update(id, { body: 'x'.repeat(531_000) })).toThrow(/512 KB/);
+  });
+
   it('rejects path traversal attempts', () => {
     // Manually insert a dangerous entry
     const db = (store as unknown as { db: import('better-sqlite3').Database }).db;
@@ -224,6 +237,11 @@ describe('search', () => {
   it('returns empty array for no match', () => {
     const results = store.search('xyznonexistent');
     expect(results).toHaveLength(0);
+  });
+
+  it('returns positive scores', () => {
+    const results = store.search('TypeScript');
+    expect(results.every(r => r.score >= 0)).toBe(true);
   });
 
   it('filters by projectPath', () => {

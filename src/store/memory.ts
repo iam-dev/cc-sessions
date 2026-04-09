@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { MemoryEntry, MemorySearchResult, SyncMemoryResult } from '../types';
-import { encodeProjectPath, encodeId, decodeId } from './memoryUtils';
+import { encodeProjectPath, encodeId } from './memoryUtils';
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter';
 
 // Re-export for consumers that want a single import point
@@ -62,32 +62,32 @@ export class MemoryStore {
       );
 
       CREATE INDEX IF NOT EXISTS idx_memory_project ON memory_entries(project_path);
-      CREATE INDEX IF NOT EXISTS idx_memory_source  ON memory_entries(source);
+      CREATE INDEX IF NOT EXISTS idx_memory_type    ON memory_entries(type);
 
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_fts USING fts5(
-        name, description, body,
+        id, name, description, body,
         content='memory_entries',
         content_rowid='rowid'
       );
 
       CREATE TRIGGER IF NOT EXISTS memory_entries_ai
         AFTER INSERT ON memory_entries BEGIN
-          INSERT INTO memory_entries_fts(rowid, name, description, body)
-          VALUES (new.rowid, new.name, new.description, new.body);
+          INSERT INTO memory_entries_fts(rowid, id, name, description, body)
+          VALUES (new.rowid, new.id, new.name, new.description, new.body);
         END;
 
-      CREATE TRIGGER IF NOT EXISTS memory_entries_au
+      CREATE TRIGGER IF NOT EXISTS memory_entries_au_fts
         AFTER UPDATE ON memory_entries BEGIN
-          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, name, description, body)
-          VALUES ('delete', old.rowid, old.name, old.description, old.body);
-          INSERT INTO memory_entries_fts(rowid, name, description, body)
-          VALUES (new.rowid, new.name, new.description, new.body);
+          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, id, name, description, body)
+          VALUES ('delete', old.rowid, old.id, old.name, old.description, old.body);
+          INSERT INTO memory_entries_fts(rowid, id, name, description, body)
+          VALUES (new.rowid, new.id, new.name, new.description, new.body);
         END;
 
       CREATE TRIGGER IF NOT EXISTS memory_entries_ad
         AFTER DELETE ON memory_entries BEGIN
-          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, name, description, body)
-          VALUES ('delete', old.rowid, old.name, old.description, old.body);
+          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, id, name, description, body)
+          VALUES ('delete', old.rowid, old.id, old.name, old.description, old.body);
         END;
     `);
   }
@@ -156,7 +156,7 @@ export class MemoryStore {
               id,
               projectPath,
               type,
-              relativeFilePath,
+              absoluteFilePath,
               name,
               description,
               body,
@@ -202,7 +202,7 @@ export class MemoryStore {
       if (existing === undefined || existing.file_mtime < mtime) {
         const body = fs.readFileSync(claudeMdPath, 'utf8');
         const name = path.basename(claudeMdPath);
-        const description = 'Project instructions for Claude Code';
+        const description = '';
 
         if (existing === undefined) {
           this.db
@@ -215,7 +215,7 @@ export class MemoryStore {
             .run(
               id,
               projectPath,
-              relativeFilePath,
+              claudeMdPath,
               name,
               description,
               body,
@@ -264,7 +264,7 @@ export class MemoryStore {
   getByProject(projectPath: string): MemoryEntry[] {
     const rows = this.db
       .prepare(
-        'SELECT * FROM memory_entries WHERE project_path = ? ORDER BY updated_at DESC',
+        'SELECT * FROM memory_entries WHERE project_path = ? ORDER BY type ASC, name ASC',
       )
       .all(projectPath) as Record<string, unknown>[];
     return rows.map((row) => this.rowToEntry(row));
@@ -320,6 +320,11 @@ export class MemoryStore {
     const newDesc = fields.description ?? entry.description;
     const newBody = fields.body ?? entry.body;
 
+    const MAX_BODY_BYTES = 530_000; // 512 KB
+    if (Buffer.byteLength(newBody, 'utf8') > MAX_BODY_BYTES) {
+      throw new Error(`Body exceeds maximum size of 512 KB`);
+    }
+
     if (entry.source === 'auto-memory') {
       fs.writeFileSync(
         resolved,
@@ -357,33 +362,63 @@ export class MemoryStore {
     query: string,
     options: { projectPath?: string; limit?: number } = {},
   ): MemorySearchResult[] {
-    const limit = options.limit ?? 20;
-    let sql = `
-      SELECT s.*, snippet(memory_entries_fts, 2, '<mark>', '</mark>', '…', 32) AS body_hl,
-             bm25(memory_entries_fts) AS score
-      FROM memory_entries_fts
-      JOIN memory_entries s ON memory_entries_fts.rowid = s.rowid
-      WHERE memory_entries_fts MATCH ?
-    `;
-    const params: unknown[] = [query + '*'];
+    const limit = Math.max(1, Math.min(options.limit ?? 20, 200));
 
-    if (options.projectPath) {
-      sql += ' AND s.project_path = ?';
-      params.push(options.projectPath);
+    try {
+      let sql = `
+        SELECT s.*, snippet(memory_entries_fts, 3, '<mark>', '</mark>', '…', 32) AS body_hl,
+               bm25(memory_entries_fts) AS score
+        FROM memory_entries_fts
+        JOIN memory_entries s ON memory_entries_fts.rowid = s.rowid
+        WHERE memory_entries_fts MATCH ?
+      `;
+      const params: unknown[] = [query + '*'];
+
+      if (options.projectPath) {
+        sql += ' AND s.project_path = ?';
+        params.push(options.projectPath);
+      }
+      sql += ' ORDER BY score LIMIT ?';
+      params.push(limit);
+
+      const rows = this.db
+        .prepare(sql)
+        .all(...params) as (Record<string, unknown> & { body_hl: string; score: number })[];
+
+      return rows.map((row) => ({
+        entry: this.rowToEntry(row),
+        projectName: path.basename(row['project_path'] as string),
+        score: Math.abs(row.score as number),
+        bodyHighlight: row.body_hl as string,
+      }));
+    } catch {
+      // FTS threw (e.g., malformed query) — fall back to LIKE-based search
+      const likeQuery = `%${query}%`;
+      let sql = `
+        SELECT *, '' AS body_hl, 0.0 AS score
+        FROM memory_entries
+        WHERE (name LIKE ? OR description LIKE ? OR body LIKE ?)
+      `;
+      const params: unknown[] = [likeQuery, likeQuery, likeQuery];
+
+      if (options.projectPath) {
+        sql += ' AND project_path = ?';
+        params.push(options.projectPath);
+      }
+      sql += ' ORDER BY updated_at DESC LIMIT ?';
+      params.push(limit);
+
+      const rows = this.db
+        .prepare(sql)
+        .all(...params) as Record<string, unknown>[];
+
+      return rows.map((row) => ({
+        entry: this.rowToEntry(row),
+        projectName: path.basename(row['project_path'] as string),
+        score: 0,
+        bodyHighlight: '',
+      }));
     }
-    sql += ' ORDER BY score LIMIT ?';
-    params.push(limit);
-
-    const rows = this.db
-      .prepare(sql)
-      .all(...params) as (Record<string, unknown> & { body_hl: string; score: number })[];
-
-    return rows.map((row) => ({
-      entry: this.rowToEntry(row),
-      projectName: path.basename(row['project_path'] as string),
-      score: row.score,
-      bodyHighlight: row.body_hl,
-    }));
   }
 
   /** Map a raw DB row (snake_case) to a MemoryEntry (camelCase). */
@@ -404,7 +439,3 @@ export class MemoryStore {
     };
   }
 }
-
-// decodeId is used by later tasks (search).
-const _futureUse = { decodeId };
-void _futureUse;
