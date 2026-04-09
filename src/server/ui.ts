@@ -331,6 +331,18 @@ export function getUIHtml(): string {
     .health-project-line {
       font-size: 11px; display: flex; align-items: center; gap: 5px; margin-top: 2px;
     }
+
+    /* ── Memory view ───────────────────────────────────────────────── */
+    .memory-results-list { padding: 16px 48px; }
+    .memory-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .memory-card-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .memory-type-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: #1a2a3a; color: #7eb8f7; text-transform: uppercase; }
+    .memory-project-name { font-size: 12px; color: var(--muted); }
+    .memory-card-name { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+    .memory-card-desc { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+    .memory-card-highlight { font-size: 13px; color: var(--muted); margin: 0; }
+    .memory-card-highlight mark { background: #3a3010; color: var(--yellow); border-radius: 2px; padding: 0 2px; }
+    .memory-search-empty { padding: 0 48px; font-size: 13px; color: var(--dim); }
   </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
@@ -361,6 +373,12 @@ export function getUIHtml(): string {
         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
       </svg>
       All Sessions
+    </div>
+    <div class="nav-item" id="nav-memory" role="button" tabindex="0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a9 9 0 0 1 9 9c0 3.18-1.65 5.97-4.13 7.6L16 21H8l-.87-2.4A9 9 0 0 1 3 11 9 9 0 0 1 12 2z"/><line x1="9" y1="17" x2="15" y2="17"/>
+      </svg>
+      Memory
     </div>
   </div>
   <div class="sidebar-recents">
@@ -452,6 +470,23 @@ export function getUIHtml(): string {
       <div class="proj-summary-recent" id="proj-summary-recent"></div>
     </div>
     <div class="proj-summary-browse" id="proj-summary-browse-btn">Browse All Sessions \u2192</div>
+  </div>
+
+  <div class="view" id="view-memory">
+    <div class="view-header">
+      <h1 class="view-title">Memory</h1>
+      <input
+        type="search"
+        id="memory-search-input"
+        class="toolbar-search"
+        placeholder="Search all memory entries\u2026"
+        autocomplete="off"
+        style="max-width:400px"
+      >
+    </div>
+    <div id="memory-search-results" class="memory-results-list">
+      <p class="memory-search-empty">Type to search memory entries across all projects.</p>
+    </div>
   </div>
 </main>
 
@@ -656,6 +691,7 @@ function showView(id) {
   });
   document.getElementById('nav-projects').classList.toggle('active', id === 'projects');
   document.getElementById('nav-all').classList.toggle('active', id === 'all');
+  document.getElementById('nav-memory').classList.toggle('active', id === 'memory');
 }
 
 /* ─── loading / empty helpers ────────────────────────────────────────────── */
@@ -1100,6 +1136,65 @@ function warningRow(text) {
   return h('div', { class: 'task-item' }, icon, h('span', { text: text }));
 }
 
+/* ─── memory ─────────────────────────────────────────────────────────────── */
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function buildMemoryCard(r) {
+  var card = h('div', { class: 'memory-card', 'data-id': r.entry.id });
+  var meta = h('div', { class: 'memory-card-meta' },
+    h('span', { class: 'memory-type-badge type-' + r.entry.type, text: r.entry.type }),
+    h('span', { class: 'memory-project-name', text: r.projectName })
+  );
+  card.appendChild(meta);
+  card.appendChild(h('h3', { class: 'memory-card-name', text: r.entry.name }));
+  card.appendChild(h('p',  { class: 'memory-card-desc',  text: r.entry.description }));
+  // bodyHighlight is server-generated markup with <mark> tags for match highlighting
+  var highlight = h('p', { class: 'memory-card-highlight' });
+  var safeHtml = window.DOMPurify
+    ? window.DOMPurify.sanitize(r.bodyHighlight, { ALLOWED_TAGS: ['mark'], ALLOWED_ATTR: [] })
+    : escapeHtml(r.bodyHighlight);
+  highlight.innerHTML = safeHtml;
+  card.appendChild(highlight);
+  return card;
+}
+
+function initMemoryView() {
+  var input = document.getElementById('memory-search-input');
+  if (!input) return;
+
+  var memSearchTimer;
+  input.addEventListener('input', function(e) {
+    clearTimeout(memSearchTimer);
+    memSearchTimer = setTimeout(function() {
+      var q = e.target.value.trim();
+      var container = document.getElementById('memory-search-results');
+      clearEl(container);
+      if (!q) {
+        container.appendChild(h('p', { class: 'memory-search-empty', text: 'Type to search memory entries across all projects.' }));
+        return;
+      }
+      container.appendChild(loadingNode());
+      fetch('/api/memory/search?q=' + encodeURIComponent(q))
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          clearEl(container);
+          var results = data.results || [];
+          if (!results.length) {
+            container.appendChild(h('p', { class: 'memory-search-empty', text: 'No results found.' }));
+            return;
+          }
+          results.forEach(function(r) { container.appendChild(buildMemoryCard(r)); });
+        })
+        .catch(function() {
+          clearEl(container);
+          container.appendChild(h('p', { class: 'memory-search-empty', text: 'Search failed. Please try again.' }));
+        });
+    }, 300);
+  });
+}
+
 /* ─── search ─────────────────────────────────────────────────────────────── */
 var searchTimer = null;
 
@@ -1127,6 +1222,7 @@ function performSearch(query) {
 /* ─── event wiring ───────────────────────────────────────────────────────── */
 document.getElementById('nav-projects').addEventListener('click', function() { showView('projects'); });
 document.getElementById('nav-all').addEventListener('click', openAll);
+document.getElementById('nav-memory').addEventListener('click', function() { showView('memory'); });
 
 document.getElementById('all-back').addEventListener('click',    function() { showView('projects'); });
 document.getElementById('proj-back').addEventListener('click',   function() { showView('projects'); });
@@ -1167,6 +1263,7 @@ document.getElementById('proj-session-filter').addEventListener('input', functio
 });
 
 /* ─── init ───────────────────────────────────────────────────────────────── */
+initMemoryView();
 Promise.all([loadRecents(), loadProjects()]).then(loadStats).catch(function(err) {
   console.error('CC Sessions UI error:', err);
 });
