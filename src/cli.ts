@@ -595,12 +595,14 @@ program
     process.on('SIGINT', () => {
       server.close(() => {
         store.close();
+        memoryStore.close();
         process.exit(0);
       });
     });
     process.on('SIGTERM', () => {
       server.close(() => {
         store.close();
+        memoryStore.close();
         process.exit(0);
       });
     });

@@ -370,6 +370,9 @@ async function route(
     if (!claudePath || typeof claudePath !== 'string') {
       return sendJson(res, 400, { error: 'projectPath required' });
     }
+    if (!fs.existsSync(path.resolve(claudePath))) {
+      return sendJson(res, 422, { error: `Project directory not found: ${claudePath}` });
+    }
     const targetPath = path.resolve(claudePath, 'CLAUDE.md');
     const safeRoot = path.resolve(claudePath) + path.sep;
     if (!targetPath.startsWith(safeRoot)) {
@@ -457,9 +460,9 @@ async function route(
 
   if (pathname === '/api/memory') {
     const memParams = new URLSearchParams(url.parse(req.url ?? '').search ?? '');
-    const projectPath = memParams.get('projectPath');
+    const projectPath = memParams.get('project');
     if (!projectPath) {
-      sendJson(res, 400, { error: 'projectPath required' });
+      sendJson(res, 400, { error: 'project required' });
       return;
     }
     if (!memoryStore) {
@@ -484,7 +487,8 @@ async function route(
     }
     const projectPath = memParams.get('projectPath') ?? undefined;
     const limitParam = memParams.get('limit');
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+    const limitParsed = limitParam ? parseInt(limitParam, 10) : undefined;
+    const limit = limitParsed !== undefined && !isNaN(limitParsed) ? limitParsed : undefined;
     const results = memoryStore.search(q, { projectPath, limit });
     sendJson(res, 200, { data: results });
     return;

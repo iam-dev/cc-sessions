@@ -511,7 +511,7 @@ describe('Memory API', () => {
     fs.rmSync(memTmpDir, { recursive: true, force: true });
   });
 
-  test('GET /api/memory?projectPath=... returns entries', async () => {
+  test('GET /api/memory?project=... returns entries', async () => {
     const projectPath = '/test/api-proj';
     const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
     const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
@@ -522,7 +522,7 @@ describe('Memory API', () => {
     );
     memoryStore.syncProject(projectPath);
 
-    const { status, body } = await get(port, `/api/memory?projectPath=${encodeURIComponent(projectPath)}`);
+    const { status, body } = await get(port, `/api/memory?project=${encodeURIComponent(projectPath)}`);
     expect(status).toBe(200);
     const { data } = body as { data: Array<{ name: string }> };
     expect(data).toHaveLength(1);
