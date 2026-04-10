@@ -41,6 +41,56 @@ store.close();
 
 ## Core Classes
 
+### MemoryStore
+
+SQLite-backed store for Claude Code memory files (auto-memory + CLAUDE.md).
+
+```typescript
+import { MemoryStore } from '@iam-dev/cc-sessions';
+
+const store = new MemoryStore();
+// or with custom paths (useful for testing)
+const store = new MemoryStore('/custom/path/db.sqlite', '/custom/memory/base');
+store.initialize();
+```
+
+#### Methods
+
+##### syncProject(projectPath: string): SyncMemoryResult
+
+Index (or re-index) all memory files for a project.
+
+```typescript
+const result = store.syncProject('/my/project');
+// { added: 2, updated: 0, deleted: 0 }
+```
+
+##### getByProject(projectPath: string): MemoryEntry[]
+
+Get all memory entries for a project, ordered by type then name.
+
+##### getById(id: string): MemoryEntry | null
+
+Get a single entry by its encoded ID.
+
+##### update(id: string, fields): MemoryEntry
+
+Update name, description, and/or body. Writes back to disk.
+
+```typescript
+store.update(id, { body: '# Updated instructions\n\nDo better stuff.' });
+```
+
+##### search(query: string, options?): MemorySearchResult[]
+
+Full-text search with FTS5 BM25 ranking.
+
+```typescript
+const results = store.search('TypeScript', { projectPath: '/my/project', limit: 10 });
+```
+
+---
+
 ### SessionStore
 
 SQLite-based storage for session memories.
@@ -129,6 +179,103 @@ interface Message {
 ```
 
 Returns `404` if the session or its log file cannot be found.
+
+### GET /api/memory
+
+Returns all indexed memory entries for a project. Accepts an optional lazy sync before returning.
+
+```
+GET /api/memory?project=/path/to/project
+→ { entries: MemoryEntry[] }
+```
+
+### GET /api/memory/search
+
+Full-text search across all projects' memory entries using SQLite FTS5.
+
+```
+GET /api/memory/search?q=typescript&limit=20
+→ { results: MemorySearchResult[] }
+```
+
+Query parameters:
+- `q` (required) — search query; prefix matching is applied automatically
+- `limit` (optional) — max results, default 20, max 200
+
+### GET /api/memory/:id
+
+Returns a single memory entry by its encoded ID.
+
+```
+GET /api/memory/dXNlcnMv...
+→ { entry: MemoryEntry }
+```
+
+Returns `404` if the ID is unknown.
+
+### PUT /api/memory/:id
+
+Update the name, description, and/or body of a memory entry. Changes are written back to the source file on disk.
+
+```
+PUT /api/memory/dXNlcnMv...
+Body: { name?: string, description?: string, body?: string }
+→ { entry: MemoryEntry }
+```
+
+Error codes: `404` (not found), `403` (path traversal), `400` (body > 512 KB).
+
+### POST /api/memory/sync
+
+Trigger a sync pass for a project — re-indexes changed files and removes deleted entries.
+
+```
+POST /api/memory/sync
+Body: { projectPath: string }
+→ { result: { added: number, updated: number, deleted: number } }
+```
+
+### POST /api/memory/create-claude-md
+
+Create a `CLAUDE.md` file at the project root. Returns `409` if one already exists, `422` if the project directory does not exist.
+
+```
+POST /api/memory/create-claude-md
+Body: { projectPath: string, content?: string }
+→ 201 { path: string }
+```
+
+---
+
+#### MemoryEntry
+
+```typescript
+interface MemoryEntry {
+  id: string;           // base64url(projectPath + '\x00' + relativeFilePath)
+  projectPath: string;
+  source: 'auto-memory' | 'claude-md';
+  type: 'user' | 'feedback' | 'project' | 'reference' | 'memory-index' | 'claude-md';
+  filePath: string;     // absolute path on disk
+  name: string;
+  description: string;
+  body: string;         // frontmatter-stripped (auto-memory) or full content (claude-md)
+  fileMtime: number;    // disk mtime (ms)
+  lastIndexedAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+#### MemorySearchResult
+
+```typescript
+interface MemorySearchResult {
+  entry: MemoryEntry;
+  projectName: string;    // from sessions DB or path.basename fallback
+  score: number;          // Math.abs(bm25) — higher is more relevant
+  bodyHighlight: string;  // FTS snippet with <mark>…</mark> around matches
+}
+```
 
 ---
 
@@ -555,5 +702,5 @@ interface StorageStats {
 import { VERSION, NAME, DEFAULT_CONFIG } from '@iam-dev/cc-sessions';
 
 console.log(`${NAME} v${VERSION}`);
-// cc-sessions v1.1.0
+// cc-sessions v2.1.0
 ```

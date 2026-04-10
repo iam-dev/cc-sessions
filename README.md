@@ -17,6 +17,7 @@ Pick up exactly where you left off - even months later.
 - **Resume in Claude Code** - Every session shows the exact `claude --resume <id>` command so you can reopen it at any point
 - **Message Thread Viewer** - Click the "💬 N messages" badge in any session detail view to expand the full conversation thread inline
 - **Session Health Scores** - Green/yellow/red health indicators on every session and project card, scored by blocker count and task completion; recurring blockers surfaced automatically at the project level
+- **Claude Code Memory** - Browse, search, and edit Claude Code's auto-memory files and `CLAUDE.md` directly in the UI; changes write back to disk instantly
 - **Cloud Sync (Pro)** - Sync sessions across devices with end-to-end encryption
 
 ## Installation
@@ -271,6 +272,47 @@ cc-sessions import --since 2026-01-01 --limit 9999
 ```
 
 Re-running import is always safe — sessions already in the database are automatically skipped.
+
+## Claude Code Memory
+
+cc-sessions indexes Claude Code's two built-in memory sources and makes them browsable and editable in the Sessions Browser UI.
+
+### What gets indexed
+
+| Source | Location | Description |
+|--------|----------|-------------|
+| Auto-memory | `~/.claude/projects/<encoded>/memory/*.md` | Typed entries (`user`, `feedback`, `project`, `reference`) Claude creates during sessions |
+| CLAUDE.md | `<project>/CLAUDE.md` or `<project>/.claude/CLAUDE.md` | Project-level instructions file |
+
+### Memory sidebar
+
+Click **Memory** in the sidebar to search across all indexed memory entries from every project. Results are highlighted with the matching terms.
+
+### Project Memory tab
+
+Open any project and click the **Memory** tab to see:
+
+- **Auto-memory cards** — each entry is editable inline (name, description, body); click **Save** to write back to disk
+- **CLAUDE.md editor** — raw textarea for the project's CLAUDE.md; saves on click
+- **Sync** — re-indexes the project's memory files on demand
+- **Create CLAUDE.md** — creates a new CLAUDE.md at the project root if one doesn't exist yet
+
+### How sync works
+
+Memory files are synced lazily: cc-sessions compares the on-disk `mtime` against the stored value and only re-reads files that have changed. A full sync can be triggered via the Sync button or the REST API.
+
+### REST API
+
+```
+GET  /api/memory?project=<path>           # all entries for a project
+GET  /api/memory/search?q=<query>         # full-text search (all projects)
+GET  /api/memory/:id                      # single entry
+PUT  /api/memory/:id                      # update name / description / body
+POST /api/memory/sync                     # sync a project { projectPath }
+POST /api/memory/create-claude-md         # create CLAUDE.md { projectPath, content }
+```
+
+---
 
 ## Configuration
 
