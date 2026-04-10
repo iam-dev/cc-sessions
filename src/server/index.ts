@@ -243,7 +243,7 @@ function handleSessionMessages(
   for (const line of lines) {
     try {
       const entry = JSON.parse(line) as Record<string, unknown>;
-      if (entry['type'] !== 'user' && entry['type'] !== 'assistant') continue;
+      if (entry['type'] !== 'user' && entry['type'] !== 'human' && entry['type'] !== 'assistant') continue;
 
       let text = '';
       const entryContent = entry['content'];
@@ -266,7 +266,7 @@ function handleSessionMessages(
       if (!text.trim()) continue;
 
       messages.push({
-        role: entry['type'] === 'user' ? 'user' : 'assistant',
+        role: (entry['type'] === 'user' || entry['type'] === 'human') ? 'user' : 'assistant',
         text: text.trim(),
         timestamp: typeof entry['timestamp'] === 'string' ? entry['timestamp'] : '',
       });
