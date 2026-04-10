@@ -46,6 +46,7 @@ describe('SessionStore', () => {
       startedAt: new Date('2025-01-12T10:00:00Z'),
       endedAt: new Date('2025-01-12T11:00:00Z'),
       duration: 60,
+      title: 'Test session title',
       summary: 'Test session summary',
       description: 'Test session description',
       tasks: [

@@ -5,9 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-04-08
+## [2.0.0] - 2026-04-10
 
 ### Added
+
+#### Claude Code Memory Integration
+
+- **`src/store/memory.ts`** — new `MemoryStore` class sharing the existing SQLite DB; indexes Claude Code's auto-memory files (`~/.claude/projects/<encoded>/memory/*.md`) and `CLAUDE.md` project instruction files into a `memory_entries` table with SQLite FTS5 full-text search
+- **`src/store/memoryUtils.ts`** — exported utilities: `encodeProjectPath` (same encoding as Claude Code), `encodeId` / `decodeId` (base64url with NUL delimiter for unambiguous projectPath + relativeFilePath IDs)
+- **`src/store/frontmatter.ts`** — `parseFrontmatter` / `serializeFrontmatter` for the YAML-lite frontmatter Claude Code writes to auto-memory files; handles double-quoted values, escaped internal quotes, and CRLF
+- **Six new REST endpoints** (`src/server/index.ts`):
+  - `GET /api/memory?project=<path>` — all memory entries for a project
+  - `GET /api/memory/search?q=<query>[&limit=N]` — cross-project FTS search (default 20, max 200)
+  - `GET /api/memory/:id` — single entry by encoded ID
+  - `PUT /api/memory/:id` — edit name, description, or body; writes back to disk
+  - `POST /api/memory/sync` — trigger a sync pass for a project
+  - `POST /api/memory/create-claude-md` — create a new `CLAUDE.md` at the project root
+- **Memory sidebar nav** — a new "Memory" item in the Sessions Browser sidebar opens a global FTS search view across all indexed memory entries
+- **Project Memory tab** — the project detail view gains a Memory tab showing editable auto-memory cards (name / description / body are `contenteditable`) and a raw textarea editor for `CLAUDE.md`; includes Sync and "Create CLAUDE.md" buttons
+- **68 new tests** covering encoding round-trips, frontmatter parse/serialize, sync (add/update/delete/skip), update with path-traversal guard, FTS search with score and highlight, and all six API endpoints
+
+#### Memory storage details
+- `memory_entries` table: `id`, `project_path`, `source` (`auto-memory` | `claude-md`), `type` (`user` | `feedback` | `project` | `reference` | `memory-index` | `claude-md`), `file_path`, `name`, `description`, `body`, `file_mtime`, `last_indexed_at`, `created_at`, `updated_at`
+- FTS5 virtual table on `id`, `name`, `description`, `body` with `bm25` scoring and `snippet()` highlights
+- Lazy sync: `file_mtime` compared against stored mtime; only changed files are re-indexed
+- Path-traversal guard on all write operations; body size limit of 512 KB enforced in `update()`
+- `MemoryStore` wired into `cc-sessions ui` startup alongside `SessionStore`
 
 #### Session Health Score Layer
 

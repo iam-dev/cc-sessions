@@ -8,6 +8,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { SessionStore } from '../../src/store/sessions';
+import { MemoryStore } from '../../src/store/memory';
 import { createServer } from '../../src/server/index';
 import type { SessionMemory } from '../../src/types';
 
@@ -19,6 +20,7 @@ function makeSession(overrides: Partial<SessionMemory> = {}): SessionMemory {
     claudeSessionId: 'claude-test',
     projectPath: '/test/project',
     projectName: 'test-project',
+    title: 'Test Session',
     startedAt: new Date('2024-06-01T10:00:00Z'),
     endedAt: new Date('2024-06-01T10:30:00Z'),
     duration: 30,
@@ -63,6 +65,81 @@ async function get(
       });
     });
     req.on('error', reject);
+    req.end();
+  });
+}
+
+/** Make a PUT request with a JSON body. */
+async function putJson(
+  port: number,
+  urlPath: string,
+  payload: unknown,
+): Promise<{ status: number; body: unknown }> {
+  return sendBody(port, 'PUT', urlPath, JSON.stringify(payload), 'application/json');
+}
+
+/** Make a PUT request with a raw string body. */
+async function putRaw(
+  port: number,
+  urlPath: string,
+  rawBody: string,
+): Promise<{ status: number; body: unknown }> {
+  return sendBody(port, 'PUT', urlPath, rawBody, 'text/plain');
+}
+
+/** Make a POST request with a JSON body. */
+async function postJson(
+  port: number,
+  urlPath: string,
+  payload: unknown,
+): Promise<{ status: number; body: unknown }> {
+  return sendBody(port, 'POST', urlPath, JSON.stringify(payload), 'application/json');
+}
+
+/** Make a POST request with a raw string body. */
+async function postRaw(
+  port: number,
+  urlPath: string,
+  rawBody: string,
+): Promise<{ status: number; body: unknown }> {
+  return sendBody(port, 'POST', urlPath, rawBody, 'text/plain');
+}
+
+/** Low-level helper — send a request with a body and parse the JSON response. */
+async function sendBody(
+  port: number,
+  method: string,
+  urlPath: string,
+  body: string,
+  contentType: string,
+): Promise<{ status: number; body: unknown }> {
+  return new Promise((resolve, reject) => {
+    const bodyBuf = Buffer.from(body, 'utf8');
+    const req = http.request(
+      {
+        hostname: '127.0.0.1',
+        port,
+        method,
+        path: urlPath,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': bodyBuf.byteLength,
+        },
+      },
+      res => {
+        let data = '';
+        res.on('data', (chunk: string) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode ?? 0, body: JSON.parse(data) });
+          } catch {
+            resolve({ status: res.statusCode ?? 0, body: data });
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(bodyBuf);
     req.end();
   });
 }
@@ -393,5 +470,209 @@ describe('Sessions HTTP API', () => {
       expect(status).toBe(400);
       expect((body as { error: string }).error).toContain('limit');
     });
+  });
+});
+
+// ─── Memory API tests ────────────────────────────────────────────────────────
+
+describe('Memory API', () => {
+  let server: http.Server;
+  let store: SessionStore;
+  let memoryStore: MemoryStore;
+  let port: number;
+  let tmpDir: string;
+  let memTmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-sessions-mem-api-'));
+    memTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-mem-api-'));
+    store = new SessionStore(path.join(tmpDir, 'test.db'));
+    memoryStore = new MemoryStore(
+      path.join(tmpDir, 'test.db'),
+      path.join(memTmpDir, 'memory-base'),
+    );
+    memoryStore.initialize();
+    ({ server } = createServer(store, memoryStore));
+
+    await new Promise<void>(resolve => {
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        port = typeof addr === 'object' && addr !== null ? addr.port : 0;
+        resolve();
+      });
+    });
+  });
+
+  afterEach(async () => {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    memoryStore.close();
+    store.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(memTmpDir, { recursive: true, force: true });
+  });
+
+  test('GET /api/memory?project=... returns entries', async () => {
+    const projectPath = '/test/api-proj';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'role.md'),
+      '---\nname: "R"\ndescription: "d"\ntype: user\n---\nBody.',
+    );
+    memoryStore.syncProject(projectPath);
+
+    const { status, body } = await get(port, `/api/memory?project=${encodeURIComponent(projectPath)}`);
+    expect(status).toBe(200);
+    const { data } = body as { data: Array<{ name: string }> };
+    expect(data).toHaveLength(1);
+    expect(data[0]!.name).toBe('R');
+  });
+
+  test('GET /api/memory returns 400 when projectPath is missing', async () => {
+    const { status, body } = await get(port, '/api/memory');
+    expect(status).toBe(400);
+    expect((body as { error: string }).error).toBeTruthy();
+  });
+
+  test('GET /api/memory/search?q=... returns results', async () => {
+    const projectPath = '/test/search-api';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'ref.md'),
+      '---\nname: "Grafana"\ndescription: "Monitoring"\ntype: reference\n---\nUse Grafana for metrics.',
+    );
+    memoryStore.syncProject(projectPath);
+
+    const { status, body } = await get(port, '/api/memory/search?q=Grafana');
+    expect(status).toBe(200);
+    const { data } = body as { data: unknown[] };
+    expect(data.length).toBeGreaterThan(0);
+  });
+
+  test('GET /api/memory/search returns 400 when q is missing', async () => {
+    const { status, body } = await get(port, '/api/memory/search');
+    expect(status).toBe(400);
+    expect((body as { error: string }).error).toBeTruthy();
+  });
+
+  test('GET /api/memory/:id returns single entry', async () => {
+    const projectPath = '/test/gb-api';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'x.md'),
+      '---\nname: "X"\ndescription: "d"\ntype: user\n---\nBody.',
+    );
+    memoryStore.syncProject(projectPath);
+    const entries = memoryStore.getByProject(projectPath);
+    const id = entries[0]!.id;
+
+    const { status, body } = await get(port, `/api/memory/${encodeURIComponent(id)}`);
+    expect(status).toBe(200);
+    const { data } = body as { data: { name: string } };
+    expect(data.name).toBe('X');
+  });
+
+  test('GET /api/memory/:id returns 404 for unknown id', async () => {
+    const { status } = await get(port, '/api/memory/nonexistent');
+    expect(status).toBe(404);
+  });
+
+  // ── PUT /api/memory/:id ───────────────────────────────────────────────────
+
+  it('PUT /api/memory/:id updates an entry', async () => {
+    const projectPath = '/test/put-api';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'role.md'),
+      '---\nname: "Old"\ndescription: "d"\ntype: user\n---\nOld body.',
+    );
+    memoryStore.syncProject(projectPath);
+    const entries = memoryStore.getByProject(projectPath);
+    const id = entries[0]!.id;
+
+    const { status, body } = await putJson(port, `/api/memory/${encodeURIComponent(id)}`, {
+      name: 'Updated',
+      body: 'New body.',
+    });
+    expect(status).toBe(200);
+    const entry = (body as { data: { entry: { name: string; body: string } } }).data.entry;
+    expect(entry.name).toBe('Updated');
+    expect(entry.body).toBe('New body.');
+  });
+
+  it('PUT /api/memory/:id returns 404 for unknown id', async () => {
+    const { status } = await putJson(port, '/api/memory/does-not-exist', { name: 'X' });
+    expect(status).toBe(404);
+  });
+
+  it('PUT /api/memory/:id returns 400 for invalid JSON body', async () => {
+    const { status } = await putRaw(port, '/api/memory/some-id', 'not-json');
+    expect(status).toBe(400);
+  });
+
+  // ── POST /api/memory/sync ─────────────────────────────────────────────────
+
+  it('POST /api/memory/sync syncs a project', async () => {
+    const projectPath = '/test/sync-api';
+    const encoded = projectPath.replace(/^\//, '').replace(/\//g, '-');
+    const memDir = path.join(memTmpDir, 'memory-base', encoded, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(memDir, 'x.md'),
+      '---\nname: "X"\ndescription: "d"\ntype: user\n---\nBody.',
+    );
+
+    const { status, body } = await postJson(port, '/api/memory/sync', { projectPath });
+    expect(status).toBe(200);
+    expect((body as { data: { result: { added: number } } }).data.result.added).toBe(1);
+  });
+
+  it('POST /api/memory/sync returns 400 when projectPath is missing', async () => {
+    const { status } = await postJson(port, '/api/memory/sync', {});
+    expect(status).toBe(400);
+  });
+
+  it('POST /api/memory/sync returns 400 for invalid JSON', async () => {
+    const { status } = await postRaw(port, '/api/memory/sync', 'bad json');
+    expect(status).toBe(400);
+  });
+
+  // ── POST /api/memory/create-claude-md ────────────────────────────────────
+
+  it('POST /api/memory/create-claude-md creates CLAUDE.md', async () => {
+    const projectPath = path.join(memTmpDir, 'new-project');
+    fs.mkdirSync(projectPath, { recursive: true });
+
+    const { status, body } = await postJson(port, '/api/memory/create-claude-md', {
+      projectPath,
+      content: '# Instructions\n\nDo good stuff.',
+    });
+    expect(status).toBe(201);
+    expect(fs.existsSync(path.join(projectPath, 'CLAUDE.md'))).toBe(true);
+    expect((body as { data: { path: string } }).data.path).toBe(path.join(projectPath, 'CLAUDE.md'));
+  });
+
+  it('POST /api/memory/create-claude-md returns 409 if CLAUDE.md already exists', async () => {
+    const projectPath = path.join(memTmpDir, 'existing-project');
+    fs.mkdirSync(projectPath, { recursive: true });
+    fs.writeFileSync(path.join(projectPath, 'CLAUDE.md'), '# Existing');
+
+    const { status } = await postJson(port, '/api/memory/create-claude-md', {
+      projectPath,
+      content: '# New',
+    });
+    expect(status).toBe(409);
+  });
+
+  it('POST /api/memory/create-claude-md returns 400 when projectPath is missing', async () => {
+    const { status } = await postJson(port, '/api/memory/create-claude-md', { content: 'hi' });
+    expect(status).toBe(400);
   });
 });

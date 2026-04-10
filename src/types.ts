@@ -308,3 +308,35 @@ export interface HookContext {
   cwd: string;
   startedAt: Date;
 }
+
+// ============================================
+// Memory Types
+// ============================================
+
+export interface MemoryEntry {
+  id: string;
+  projectPath: string;
+  source: 'auto-memory' | 'claude-md';
+  type: 'user' | 'feedback' | 'project' | 'reference' | 'memory-index' | 'claude-md';
+  filePath: string;
+  name: string;
+  description: string;
+  body: string;
+  fileMtime: number;
+  lastIndexedAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MemorySearchResult {
+  entry: MemoryEntry;
+  projectName: string;
+  score: number;
+  bodyHighlight: string;
+}
+
+export interface SyncMemoryResult {
+  added: number;
+  updated: number;
+  deleted: number;
+}

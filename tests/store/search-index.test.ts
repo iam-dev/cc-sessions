@@ -20,6 +20,7 @@ function makeSession(overrides: Partial<SessionMemory> = {}): SessionMemory {
     startedAt: new Date('2025-01-15T10:00:00Z'),
     endedAt: new Date('2025-01-15T11:00:00Z'),
     duration: 60,
+    title: 'Auth feature session',
     summary: 'Implemented authentication feature',
     description: 'Built user login with JWT tokens',
     tasks: [],

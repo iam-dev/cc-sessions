@@ -232,14 +232,14 @@ export function getUIHtml(): string {
     ::-webkit-scrollbar-thumb:hover  { background: #4a4a4a; }
 
     /* ── Project Summary ──────────────────────────────────────────────────────── */
-    .proj-summary-stats { display: flex; gap: 24px; flex-wrap: wrap; padding: 0 48px 24px; }
+    .proj-summary-stats { display: flex; gap: 24px; flex-wrap: wrap; padding: 0 0 24px; }
     .proj-summary-stat {
       background: var(--card-bg); border: 1px solid var(--border);
       border-radius: 8px; padding: 14px 20px; display: flex; flex-direction: column; gap: 4px; min-width: 110px;
     }
     .proj-summary-stat-value { font-size: 22px; font-weight: 600; color: var(--text); }
     .proj-summary-stat-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
-    .proj-summary-section { padding: 0 48px 24px; }
+    .proj-summary-section { padding: 0 0 24px; }
     .proj-summary-section-title {
       font-size: 11px; font-weight: 600; text-transform: uppercase;
       letter-spacing: .06em; color: var(--dim); margin-bottom: 12px;
@@ -247,7 +247,7 @@ export function getUIHtml(): string {
     .proj-summary-recent { display: flex; flex-direction: column; gap: 8px; }
     .proj-summary-browse {
       display: inline-flex; align-items: center; gap: 6px;
-      margin: 4px 48px 48px; padding: 9px 18px;
+      margin: 4px 0 48px; padding: 9px 18px;
       background: var(--card-bg); border: 1px solid var(--border);
       border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--muted);
       transition: background .12s, border-color .12s, color .12s; width: fit-content;
@@ -331,6 +331,58 @@ export function getUIHtml(): string {
     .health-project-line {
       font-size: 11px; display: flex; align-items: center; gap: 5px; margin-top: 2px;
     }
+
+    /* ── Memory view ───────────────────────────────────────────────── */
+    .memory-results-list { padding: 16px 48px; }
+    .memory-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .memory-card-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .memory-type-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: #1a2a3a; color: #7eb8f7; text-transform: uppercase; }
+    .memory-project-name { font-size: 12px; color: var(--muted); }
+    .memory-card-name { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+    .memory-card-desc { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+    .memory-card-highlight { font-size: 13px; color: var(--muted); margin: 0; }
+    .memory-card-highlight mark { background: #3a3010; color: var(--yellow); border-radius: 2px; padding: 0 2px; }
+    .memory-search-empty { padding: 0 48px; font-size: 13px; color: var(--dim); }
+
+    /* ── Project detail tabs ───────────────────────────────────────── */
+    .proj-tabs { display: flex; gap: 4px; padding: 0 48px 0; border-bottom: 1px solid var(--border); margin-bottom: 0; }
+    .tab-btn {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      padding: 10px 16px; font-size: 13px; color: var(--muted); cursor: pointer;
+      transition: color .12s, border-color .12s; margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { padding: 24px 48px 48px; }
+
+    /* ── Memory tab ────────────────────────────────────────────────── */
+    .memory-tab-toolbar { display: flex; gap: 8px; padding: 12px 0 16px; }
+    .memory-section { margin-bottom: 24px; }
+    .memory-section-title { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px; }
+    .memory-cards-grid { display: flex; flex-direction: column; gap: 12px; }
+    .memory-card.editable .memory-card-name { cursor: text; }
+    .code-editor { width: 100%; font-family: 'Courier New', monospace; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; padding: 12px; resize: vertical; background: var(--card-bg); color: var(--text); box-sizing: border-box; }
+    .editor-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+    .save-status { font-size: 12px; color: var(--muted); }
+    .memory-card-field { margin-bottom: 12px; }
+    .memory-field-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px; }
+    .memory-card-body { font-family: monospace; font-size: 13px; min-height: 60px; white-space: pre-wrap; }
+    .card-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-primary {
+      background: var(--accent); border: none; border-radius: 6px; padding: 7px 16px;
+      font-size: 13px; color: #1a1a1a; cursor: pointer; font-weight: 600;
+      transition: opacity .12s;
+    }
+    .btn-primary:hover { opacity: .85; }
+    .btn-primary:disabled { opacity: .5; cursor: default; }
+    .btn-secondary {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 7px 14px; font-size: 13px; color: var(--muted); cursor: pointer;
+      transition: color .12s, border-color .12s;
+    }
+    .btn-secondary:hover { color: var(--text); border-color: #555; }
+    .btn-secondary:disabled { opacity: .5; cursor: default; }
   </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
@@ -361,6 +413,12 @@ export function getUIHtml(): string {
         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
       </svg>
       All Sessions
+    </div>
+    <div class="nav-item" id="nav-memory" role="button" tabindex="0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a9 9 0 0 1 9 9c0 3.18-1.65 5.97-4.13 7.6L16 21H8l-.87-2.4A9 9 0 0 1 3 11 9 9 0 0 1 12 2z"/><line x1="9" y1="17" x2="15" y2="17"/>
+      </svg>
+      Memory
     </div>
   </div>
   <div class="sidebar-recents">
@@ -442,16 +500,65 @@ export function getUIHtml(): string {
       Projects
     </div>
     <div class="view-header"><h1 class="view-title" id="proj-summary-title"></h1></div>
-    <div class="proj-summary-stats" id="proj-summary-stats"></div>
-    <div class="proj-summary-section" id="proj-summary-readme-section">
-      <div class="proj-summary-section-title">README</div>
-      <div class="proj-summary-readme" id="proj-summary-readme"></div>
+    <div class="proj-tabs">
+      <button class="tab-btn active" data-tab="overview" id="tab-btn-overview">Overview</button>
+      <button class="tab-btn" data-tab="sessions" id="tab-btn-sessions">Sessions</button>
+      <button class="tab-btn" data-tab="memory" id="tab-btn-memory">Memory</button>
     </div>
-    <div class="proj-summary-section">
-      <div class="proj-summary-section-title">Recent Activity</div>
-      <div class="proj-summary-recent" id="proj-summary-recent"></div>
+    <div class="tab-panel" id="tab-overview">
+      <div class="proj-summary-stats" id="proj-summary-stats"></div>
+      <div class="proj-summary-section" id="proj-summary-readme-section">
+        <div class="proj-summary-section-title">README</div>
+        <div class="proj-summary-readme" id="proj-summary-readme"></div>
+      </div>
+      <div class="proj-summary-section">
+        <div class="proj-summary-section-title">Recent Activity</div>
+        <div class="proj-summary-recent" id="proj-summary-recent"></div>
+      </div>
+      <div class="proj-summary-browse" id="proj-summary-browse-btn">Browse All Sessions \u2192</div>
     </div>
-    <div class="proj-summary-browse" id="proj-summary-browse-btn">Browse All Sessions \u2192</div>
+    <div class="tab-panel" id="tab-sessions" style="display:none;">
+      <div class="sessions-list" id="proj-summary-sessions-list"></div>
+    </div>
+    <div class="tab-panel" id="tab-memory" style="display:none;">
+      <div class="memory-tab-toolbar">
+        <button class="btn-secondary" id="sync-memory-btn">\u21bb Sync Memory</button>
+        <button class="btn-secondary" id="create-claude-md-btn" style="display:none;">+ Create CLAUDE.md</button>
+      </div>
+      <section class="memory-section" id="auto-memory-section">
+        <h3 class="memory-section-title">Auto-Memory Entries</h3>
+        <div id="auto-memory-cards" class="memory-cards-grid">
+          <p class="empty-state">No auto-memory entries. Memory is created as you work with Claude Code.</p>
+        </div>
+      </section>
+      <section class="memory-section" id="claude-md-section" style="display:none;">
+        <h3 class="memory-section-title">CLAUDE.md</h3>
+        <div class="claude-md-editor-container">
+          <textarea id="claude-md-editor" class="code-editor" rows="20" spellcheck="false"></textarea>
+          <div class="editor-actions">
+            <button class="btn-primary" id="save-claude-md-btn">Save</button>
+            <span class="save-status" id="save-status"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="view" id="view-memory">
+    <div class="view-header">
+      <h1 class="view-title">Memory</h1>
+      <input
+        type="search"
+        id="memory-search-input"
+        class="toolbar-search"
+        placeholder="Search all memory entries\u2026"
+        autocomplete="off"
+        style="max-width:400px"
+      >
+    </div>
+    <div id="memory-search-results" class="memory-results-list">
+      <p class="memory-search-empty">Type to search memory entries across all projects.</p>
+    </div>
   </div>
 </main>
 
@@ -556,8 +663,8 @@ function formatDuration(minutes) {
 function formatTokens(n) {
   if (!n) return '0';
   if (n < 1000)     return String(n);
-  if (n < 1000000)  return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n < 1000000)  return (n / 1000).toFixed(1).replace(/[.]0$/, '') + 'k';
+  return (n / 1000000).toFixed(1).replace(/[.]0$/, '') + 'M';
 }
 
 function trunc(str, max) {
@@ -656,6 +763,7 @@ function showView(id) {
   });
   document.getElementById('nav-projects').classList.toggle('active', id === 'projects');
   document.getElementById('nav-all').classList.toggle('active', id === 'all');
+  document.getElementById('nav-memory').classList.toggle('active', id === 'memory');
 }
 
 /* ─── loading / empty helpers ────────────────────────────────────────────── */
@@ -855,8 +963,11 @@ function openProject(projectPath, projectName) {
 }
 
 function openProjectSummary(projectPath, projectName) {
+  currentProjSummaryPath = projectPath;
   document.getElementById('proj-summary-title').textContent = projectName;
   document.getElementById('proj-summary-browse-btn').setAttribute('data-path', projectPath);
+  // Always reset to Overview tab when opening a project
+  switchProjTab('overview');
   showView('proj-summary');
 
   var statsEl  = document.getElementById('proj-summary-stats');
@@ -1100,6 +1211,226 @@ function warningRow(text) {
   return h('div', { class: 'task-item' }, icon, h('span', { text: text }));
 }
 
+/* ─── memory ─────────────────────────────────────────────────────────────── */
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function buildMemoryCard(r) {
+  var card = h('div', { class: 'memory-card', 'data-id': r.entry.id });
+  var meta = h('div', { class: 'memory-card-meta' },
+    h('span', { class: 'memory-type-badge type-' + r.entry.type, text: r.entry.type }),
+    h('span', { class: 'memory-project-name', text: r.projectName })
+  );
+  card.appendChild(meta);
+  card.appendChild(h('h3', { class: 'memory-card-name', text: r.entry.name }));
+  card.appendChild(h('p',  { class: 'memory-card-desc',  text: r.entry.description }));
+  // bodyHighlight is server-generated markup with <mark> tags for match highlighting
+  var highlight = h('p', { class: 'memory-card-highlight' });
+  var safeHtml = window.DOMPurify
+    ? window.DOMPurify.sanitize(r.bodyHighlight, { ALLOWED_TAGS: ['mark'], ALLOWED_ATTR: [] })
+    : escapeHtml(r.bodyHighlight);
+  highlight.innerHTML = safeHtml;
+  card.appendChild(highlight);
+  return card;
+}
+
+function initMemoryView() {
+  var input = document.getElementById('memory-search-input');
+  if (!input) return;
+
+  var memSearchTimer;
+  input.addEventListener('input', function(e) {
+    clearTimeout(memSearchTimer);
+    memSearchTimer = setTimeout(function() {
+      var q = e.target.value.trim();
+      var container = document.getElementById('memory-search-results');
+      clearEl(container);
+      if (!q) {
+        container.appendChild(h('p', { class: 'memory-search-empty', text: 'Type to search memory entries across all projects.' }));
+        return;
+      }
+      container.appendChild(loadingNode());
+      fetch('/api/memory/search?q=' + encodeURIComponent(q))
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          clearEl(container);
+          var results = data.results || [];
+          if (!results.length) {
+            container.appendChild(h('p', { class: 'memory-search-empty', text: 'No results found.' }));
+            return;
+          }
+          results.forEach(function(r) { container.appendChild(buildMemoryCard(r)); });
+        })
+        .catch(function() {
+          clearEl(container);
+          container.appendChild(h('p', { class: 'memory-search-empty', text: 'Search failed. Please try again.' }));
+        });
+    }, 300);
+  });
+}
+
+/* ─── project detail tabs ────────────────────────────────────────────────── */
+var currentProjSummaryPath = null;
+
+function switchProjTab(tabName) {
+  document.querySelectorAll('.proj-tabs .tab-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
+  });
+  var panels = ['overview', 'sessions', 'memory'];
+  panels.forEach(function(name) {
+    var panel = document.getElementById('tab-' + name);
+    if (panel) panel.style.display = name === tabName ? '' : 'none';
+  });
+  if (tabName === 'memory' && currentProjSummaryPath) {
+    loadMemoryTab(currentProjSummaryPath);
+  }
+  if (tabName === 'sessions' && currentProjSummaryPath) {
+    loadProjSummarySessionsTab(currentProjSummaryPath);
+  }
+}
+
+function loadProjSummarySessionsTab(projectPath) {
+  var list = document.getElementById('proj-summary-sessions-list');
+  if (!list) return;
+  clearEl(list);
+  list.appendChild(loadingNode());
+  get('/api/sessions?project=' + encodeURIComponent(projectPath) + '&limit=50')
+    .then(function(res) {
+      renderSessionList(Array.isArray(res.data) ? res.data : [], list, 'proj-summary');
+    })
+    .catch(function() {
+      clearEl(list);
+      list.appendChild(emptyNode('', 'Failed to load sessions', 'Please try again'));
+    });
+}
+
+/* ─── project memory tab ─────────────────────────────────────────────────── */
+var currentMemoryProject = null;
+var claudeMdEntryId = null;
+
+function loadMemoryTab(projectPath) {
+  currentMemoryProject = projectPath;
+
+  fetch('/api/memory?project=' + encodeURIComponent(projectPath))
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var entries = data.entries || [];
+      var autoEntries = entries.filter(function(e) { return e.source === 'auto-memory'; });
+      var claudeMd    = entries.find(function(e)  { return e.source === 'claude-md'; });
+
+      renderAutoMemoryCards(autoEntries);
+
+      var claudeMdSection = document.getElementById('claude-md-section');
+      var createBtn       = document.getElementById('create-claude-md-btn');
+
+      if (claudeMd) {
+        claudeMdEntryId = claudeMd.id;
+        var editor = document.getElementById('claude-md-editor');
+        if (editor) editor.value = claudeMd.body;
+        if (claudeMdSection) claudeMdSection.style.display = '';
+        if (createBtn) createBtn.style.display = 'none';
+      } else {
+        claudeMdEntryId = null;
+        if (claudeMdSection) claudeMdSection.style.display = 'none';
+        if (createBtn) createBtn.style.display = '';
+      }
+    })
+    .catch(function(err) {
+      console.error('Failed to load memory tab:', err);
+    });
+}
+
+function renderAutoMemoryCards(entries) {
+  var container = document.getElementById('auto-memory-cards');
+  if (!container) return;
+
+  if (!entries.length) {
+    container.innerHTML = '';
+    container.appendChild(h('p', { class: 'empty-state', text: 'No auto-memory entries. Memory is created as you work with Claude Code.' }));
+    return;
+  }
+
+  clearEl(container);
+  entries.forEach(function(e) {
+    var statusEl = h('span', { class: 'save-status entry-save-status-' + e.id });
+
+    var nameField = h('div', {
+      class: 'memory-card-name',
+      contenteditable: 'true',
+      'data-field': 'name',
+      'data-original': e.name,
+      text: e.name
+    });
+    var descField = h('div', {
+      class: 'memory-card-desc',
+      contenteditable: 'true',
+      'data-field': 'description',
+      'data-original': e.description,
+      text: e.description
+    });
+    var bodyField = h('div', {
+      class: 'memory-card-body',
+      contenteditable: 'true',
+      'data-field': 'body',
+      'data-original': e.body,
+      text: e.body
+    });
+
+    var saveBtn = h('button', {
+      class: 'btn-primary btn-sm save-entry-btn',
+      'data-id': e.id,
+      text: 'Save'
+    });
+
+    (function(entryId, nameFld, descFld, bodyFld, statusSpan, btn) {
+      btn.addEventListener('click', function() {
+        var fields = {
+          name:        nameFld.textContent || '',
+          description: descFld.textContent || '',
+          body:        bodyFld.textContent || '',
+        };
+        fetch('/api/memory/' + encodeURIComponent(entryId), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fields),
+        })
+          .then(function(res) {
+            if (res.ok) {
+              statusSpan.textContent = 'Saved';
+              setTimeout(function() { statusSpan.textContent = ''; }, 2000);
+            } else {
+              statusSpan.textContent = 'Save failed';
+            }
+          })
+          .catch(function() {
+            statusSpan.textContent = 'Save failed';
+          });
+      });
+    })(e.id, nameField, descField, bodyField, statusEl, saveBtn);
+
+    var card = h('div', { class: 'memory-card editable', 'data-id': e.id },
+      h('div', { class: 'memory-card-meta' },
+        h('span', { class: 'memory-type-badge type-' + e.type, text: e.type })
+      ),
+      h('div', { class: 'memory-card-field' },
+        h('label', { class: 'memory-field-label', text: 'Name' }),
+        nameField
+      ),
+      h('div', { class: 'memory-card-field' },
+        h('label', { class: 'memory-field-label', text: 'Description' }),
+        descField
+      ),
+      h('div', { class: 'memory-card-field' },
+        h('label', { class: 'memory-field-label', text: 'Body' }),
+        bodyField
+      ),
+      h('div', { class: 'card-actions' }, saveBtn, statusEl)
+    );
+    container.appendChild(card);
+  });
+}
+
 /* ─── search ─────────────────────────────────────────────────────────────── */
 var searchTimer = null;
 
@@ -1127,6 +1458,7 @@ function performSearch(query) {
 /* ─── event wiring ───────────────────────────────────────────────────────── */
 document.getElementById('nav-projects').addEventListener('click', function() { showView('projects'); });
 document.getElementById('nav-all').addEventListener('click', openAll);
+document.getElementById('nav-memory').addEventListener('click', function() { showView('memory'); });
 
 document.getElementById('all-back').addEventListener('click',    function() { showView('projects'); });
 document.getElementById('proj-back').addEventListener('click',   function() { showView('projects'); });
@@ -1166,7 +1498,83 @@ document.getElementById('proj-session-filter').addEventListener('input', functio
   renderSessionList(filtered, list, 'proj-sessions');
 });
 
+/* ─── project detail tab wiring ──────────────────────────────────────────── */
+document.querySelectorAll('.proj-tabs .tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var tabName = btn.getAttribute('data-tab');
+    if (tabName) switchProjTab(tabName);
+  });
+});
+
+/* ─── memory action buttons ──────────────────────────────────────────────── */
+var syncMemoryBtn = document.getElementById('sync-memory-btn');
+if (syncMemoryBtn) {
+  syncMemoryBtn.addEventListener('click', function() {
+    if (!currentMemoryProject) return;
+    syncMemoryBtn.disabled = true;
+    syncMemoryBtn.textContent = 'Syncing\u2026';
+    fetch('/api/memory/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectPath: currentMemoryProject }),
+    })
+      .then(function() { return loadMemoryTab(currentMemoryProject); })
+      .catch(function(err) { console.error('Sync failed:', err); })
+      .finally(function() {
+        syncMemoryBtn.disabled = false;
+        syncMemoryBtn.textContent = '\u21bb Sync Memory';
+      });
+  });
+}
+
+var saveClaudeMdBtn = document.getElementById('save-claude-md-btn');
+if (saveClaudeMdBtn) {
+  saveClaudeMdBtn.addEventListener('click', function() {
+    if (!claudeMdEntryId) return;
+    var editor   = document.getElementById('claude-md-editor');
+    var statusEl = document.getElementById('save-status');
+    if (!editor || !statusEl) return;
+    fetch('/api/memory/' + encodeURIComponent(claudeMdEntryId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: editor.value }),
+    })
+      .then(function(res) {
+        if (res.ok) {
+          statusEl.textContent = 'Saved \u2713';
+          setTimeout(function() { statusEl.textContent = ''; }, 2000);
+        } else {
+          statusEl.textContent = 'Save failed';
+        }
+      })
+      .catch(function() {
+        statusEl.textContent = 'Save failed';
+      });
+  });
+}
+
+var createClaudeMdBtn = document.getElementById('create-claude-md-btn');
+if (createClaudeMdBtn) {
+  createClaudeMdBtn.addEventListener('click', function() {
+    if (!currentMemoryProject) return;
+    fetch('/api/memory/create-claude-md', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectPath: currentMemoryProject, content: '# Project Instructions\n\n' }),
+    })
+      .then(function(res) {
+        if (res.ok || res.status === 409) {
+          return loadMemoryTab(currentMemoryProject);
+        }
+      })
+      .catch(function(err) {
+        console.error('Failed to create CLAUDE.md:', err);
+      });
+  });
+}
+
 /* ─── init ───────────────────────────────────────────────────────────────── */
+initMemoryView();
 Promise.all([loadRecents(), loadProjects()]).then(loadStats).catch(function(err) {
   console.error('CC Sessions UI error:', err);
 });

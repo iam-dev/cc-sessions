@@ -48,6 +48,7 @@ function makeSession(overrides: Partial<SessionMemory> = {}): SessionMemory {
     startedAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
     endedAt: new Date(),
     duration: 30,
+    title: 'Implemented a new feature',
     summary: 'Implemented a new feature',
     description: 'Feature description',
     tasks: [],

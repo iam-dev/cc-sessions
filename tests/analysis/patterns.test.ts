@@ -21,6 +21,7 @@ function makeSession(overrides: Partial<SessionMemory> = {}): SessionMemory {
     startedAt: new Date('2025-01-12T10:00:00Z'),
     endedAt: new Date('2025-01-12T11:00:00Z'),
     duration: 60,
+    title: '',
     summary: '',
     description: '',
     tasks: [],

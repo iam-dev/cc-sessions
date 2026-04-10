@@ -48,6 +48,7 @@ describe('CloudSync', () => {
     startedAt: new Date('2025-01-01T10:00:00Z'),
     endedAt: new Date('2025-01-01T11:00:00Z'),
     duration: 60,
+    title: 'Test session title',
     summary: 'Test session',
     description: 'A test session for unit testing',
     tasks: [],

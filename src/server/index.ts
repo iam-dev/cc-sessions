@@ -13,6 +13,7 @@ import * as url from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SessionStore } from '../store/sessions';
+import { MemoryStore } from '../store/memory';
 import { getUIHtml } from './ui';
 import { aggregateProjectHealth } from '../analysis/health';
 import { getRecurringBlockers } from '../analysis/patterns';
@@ -242,7 +243,7 @@ function handleSessionMessages(
   for (const line of lines) {
     try {
       const entry = JSON.parse(line) as Record<string, unknown>;
-      if (entry['type'] !== 'user' && entry['type'] !== 'assistant') continue;
+      if (entry['type'] !== 'user' && entry['type'] !== 'human' && entry['type'] !== 'assistant') continue;
 
       let text = '';
       const entryContent = entry['content'];
@@ -265,7 +266,7 @@ function handleSessionMessages(
       if (!text.trim()) continue;
 
       messages.push({
-        role: entry['type'] === 'user' ? 'user' : 'assistant',
+        role: (entry['type'] === 'user' || entry['type'] === 'human') ? 'user' : 'assistant',
         text: text.trim(),
         timestamp: typeof entry['timestamp'] === 'string' ? entry['timestamp'] : '',
       });
@@ -313,22 +314,106 @@ function handleStats(
   sendJson(res, 200, { data: stats });
 }
 
+// ─── body parsing ─────────────────────────────────────────────────────────────
+
+/**
+ * Collect all chunks from the request stream and parse as JSON.
+ * Resolves to the parsed value, or rejects with a SyntaxError on malformed input.
+ */
+async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+}
+
 // ─── router ───────────────────────────────────────────────────────────────────
 
 /**
  * Route an incoming request to the appropriate handler.
  */
-function route(
+async function route(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   store: SessionStore,
-): void {
-  if (req.method !== 'GET') {
-    sendJson(res, 405, { error: 'Method not allowed' });
-    return;
+  memoryStore: MemoryStore | undefined,
+): Promise<void> {
+  const method = req.method ?? 'GET';
+  const pathname = url.parse(req.url ?? '').pathname ?? '/';
+
+  // ── Memory mutation routes (PUT / POST) ──────────────────────────────────
+
+  if (method === 'POST' && pathname === '/api/memory/sync') {
+    if (!memoryStore) return sendJson(res, 503, { error: 'Memory store not available' });
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON' });
+    }
+    const { projectPath: syncPath } = body as { projectPath?: string };
+    if (!syncPath || typeof syncPath !== 'string') {
+      return sendJson(res, 400, { error: 'projectPath required' });
+    }
+    const result = memoryStore.syncProject(syncPath);
+    return sendJson(res, 200, { data: { result } });
   }
 
-  const pathname = url.parse(req.url ?? '').pathname ?? '/';
+  if (method === 'POST' && pathname === '/api/memory/create-claude-md') {
+    if (!memoryStore) return sendJson(res, 503, { error: 'Memory store not available' });
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON' });
+    }
+    const { projectPath: claudePath, content } = body as { projectPath?: string; content?: string };
+    if (!claudePath || typeof claudePath !== 'string') {
+      return sendJson(res, 400, { error: 'projectPath required' });
+    }
+    if (!fs.existsSync(path.resolve(claudePath))) {
+      return sendJson(res, 422, { error: `Project directory not found: ${claudePath}` });
+    }
+    const targetPath = path.resolve(claudePath, 'CLAUDE.md');
+    const safeRoot = path.resolve(claudePath) + path.sep;
+    if (!targetPath.startsWith(safeRoot)) {
+      return sendJson(res, 403, { error: 'Path traversal detected' });
+    }
+    if (fs.existsSync(targetPath)) {
+      return sendJson(res, 409, { error: 'CLAUDE.md already exists' });
+    }
+    fs.writeFileSync(targetPath, typeof content === 'string' ? content : '', 'utf8');
+    memoryStore.syncProject(claudePath);
+    return sendJson(res, 201, { data: { path: targetPath } });
+  }
+
+  const memoryIdMatch = pathname.match(/^\/api\/memory\/([^/]+)$/);
+  if (method === 'PUT' && memoryIdMatch) {
+    if (!memoryStore) return sendJson(res, 503, { error: 'Memory store not available' });
+    const id = decodeURIComponent(memoryIdMatch[1]!);
+    let fields: Record<string, unknown>;
+    try {
+      fields = await readJsonBody(req);
+    } catch {
+      return sendJson(res, 400, { error: 'Invalid JSON' });
+    }
+    try {
+      const updated = memoryStore.update(id, fields as Parameters<MemoryStore['update']>[1]);
+      return sendJson(res, 200, { data: { entry: updated } });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      const status = msg.toLowerCase().includes('not found') ? 404
+        : msg.toLowerCase().includes('traversal') ? 403
+        : msg.toLowerCase().includes('512') ? 400
+        : 500;
+      return sendJson(res, status, { error: msg });
+    }
+  }
+
+  // ── GET-only guard ────────────────────────────────────────────────────────
+
+  if (method !== 'GET') {
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  }
 
   if (pathname === '/') {
     handleRoot(req, res);
@@ -373,6 +458,56 @@ function route(
     return;
   }
 
+  if (pathname === '/api/memory') {
+    const memParams = new URLSearchParams(url.parse(req.url ?? '').search ?? '');
+    const projectPath = memParams.get('project');
+    if (!projectPath) {
+      sendJson(res, 400, { error: 'project required' });
+      return;
+    }
+    if (!memoryStore) {
+      sendJson(res, 503, { error: 'Memory store not available' });
+      return;
+    }
+    const entries = memoryStore.getByProject(projectPath);
+    sendJson(res, 200, { data: entries });
+    return;
+  }
+
+  if (pathname === '/api/memory/search') {
+    const memParams = new URLSearchParams(url.parse(req.url ?? '').search ?? '');
+    const q = memParams.get('q');
+    if (!q) {
+      sendJson(res, 400, { error: 'q required' });
+      return;
+    }
+    if (!memoryStore) {
+      sendJson(res, 503, { error: 'Memory store not available' });
+      return;
+    }
+    const projectPath = memParams.get('projectPath') ?? undefined;
+    const limitParam = memParams.get('limit');
+    const limitParsed = limitParam ? parseInt(limitParam, 10) : undefined;
+    const limit = limitParsed !== undefined && !isNaN(limitParsed) ? limitParsed : undefined;
+    const results = memoryStore.search(q, { projectPath, limit });
+    sendJson(res, 200, { data: results });
+    return;
+  }
+
+  if (memoryIdMatch) {
+    if (!memoryStore) {
+      sendJson(res, 503, { error: 'Memory store not available' });
+      return;
+    }
+    const entry = memoryStore.getById(decodeURIComponent(memoryIdMatch[1]!));
+    if (!entry) {
+      sendJson(res, 404, { error: 'Not found' });
+      return;
+    }
+    sendJson(res, 200, { data: entry });
+    return;
+  }
+
   sendJson(res, 404, { error: 'Route not found: ' + pathname });
 }
 
@@ -390,14 +525,12 @@ function route(
  * server.listen(3456, '127.0.0.1', () => console.log('Ready'));
  * ```
  */
-export function createServer(store: SessionStore): ServerHandle {
+export function createServer(store: SessionStore, memoryStore?: MemoryStore): ServerHandle {
   const server = http.createServer((req, res) => {
-    try {
-      route(req, res, store);
-    } catch (err) {
+    route(req, res, store, memoryStore).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : 'Internal server error';
       sendJson(res, 500, { error: message });
-    }
+    });
   });
 
   return { server };

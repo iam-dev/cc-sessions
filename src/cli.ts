@@ -11,6 +11,7 @@ import * as http from 'http';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { version } = require('../package.json') as { version: string };
 import { SessionStore } from './store/sessions';
+import { MemoryStore } from './store/memory';
 import { loadConfig, getConfigFile } from './config/loader';
 import { RETENTION_OPTIONS, SUMMARY_MODELS } from './config/defaults';
 import { createServer } from './server/index';
@@ -555,7 +556,9 @@ program
     }
 
     const store = new SessionStore();
-    const { server } = createServer(store);
+    const memoryStore = new MemoryStore();
+    memoryStore.initialize();
+    const { server } = createServer(store, memoryStore);
 
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
@@ -592,12 +595,14 @@ program
     process.on('SIGINT', () => {
       server.close(() => {
         store.close();
+        memoryStore.close();
         process.exit(0);
       });
     });
     process.on('SIGTERM', () => {
       server.close(() => {
         store.close();
+        memoryStore.close();
         process.exit(0);
       });
     });
