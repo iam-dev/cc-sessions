@@ -349,6 +349,7 @@ describe('SessionStore.getByClaudeSessionId', () => {
       startedAt: now,
       endedAt: now,
       duration: 5,
+      title: 'Test',
       summary: 'Test',
       description: '',
       tasks: [],

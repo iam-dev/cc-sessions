@@ -65,6 +65,7 @@ const baseParsed: ParsedSession = {
 };
 
 const baseSummary: SessionSummary = {
+  title: 'Fixed the bug',
   summary: 'Fixed the bug',
   description: 'We fixed the critical bug',
   tasks: [{ id: '1', description: 'Fix bug', status: 'completed', createdAt: new Date() }],
