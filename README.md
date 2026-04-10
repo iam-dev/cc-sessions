@@ -1,6 +1,6 @@
 # cc-sessions
 
-**Your AI coding sessions shouldn't be a black box.**
+**Your AI coding sessions deserve a memory.**
 
 cc-sessions adds memory, observability, and replay to Claude Code.
 
@@ -52,6 +52,14 @@ With cc-sessions you can:
 | Search | Within session | Across all sessions |
 | Resume | Manual copy-paste | One command |
 | Memory | Auto-memory files | Browsable + editable UI |
+
+---
+
+## Who is this for?
+
+- Developers using Claude Code daily who lose context between sessions
+- Anyone building with AI-assisted workflows who needs to understand what happened
+- Teams who want visibility into AI coding work across projects
 
 ---
 
