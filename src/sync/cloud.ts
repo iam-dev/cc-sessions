@@ -33,15 +33,6 @@ export interface RemoteSessionInfo {
 }
 
 /**
- * Provider-specific S3 endpoint configurations
- */
-const PROVIDER_ENDPOINTS: Record<string, string | undefined> = {
-  r2: undefined, // Set via endpoint in config
-  s3: undefined, // Uses AWS default
-  b2: undefined  // Set via endpoint in config
-};
-
-/**
  * Device ID file path
  */
 const DEVICE_ID_PATH = path.join(os.homedir(), '.cc-sessions', 'device-id');

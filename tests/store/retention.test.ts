@@ -46,6 +46,7 @@ function makeSession(overrides: Partial<SessionMemory> = {}): SessionMemory {
     startedAt: new Date(),
     endedAt: new Date(),
     duration: 30,
+    title: 'Test session title',
     summary: 'Test session',
     description: 'Test description',
     tasks: [],

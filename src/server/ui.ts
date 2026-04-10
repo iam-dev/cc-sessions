@@ -663,8 +663,8 @@ function formatDuration(minutes) {
 function formatTokens(n) {
   if (!n) return '0';
   if (n < 1000)     return String(n);
-  if (n < 1000000)  return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n < 1000000)  return (n / 1000).toFixed(1).replace(/[.]0$/, '') + 'k';
+  return (n / 1000000).toFixed(1).replace(/[.]0$/, '') + 'M';
 }
 
 function trunc(str, max) {
